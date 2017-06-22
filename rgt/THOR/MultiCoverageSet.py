@@ -70,9 +70,9 @@ class MultiCoverageSet(DualCoverageSet):
     
         return cov1, cov2
     
-    def _compute_gc_content(self, no_gc_content, path_inputs, stepsize, binsize, genome_path, name, chrom_sizes, chrom_sizes_dict):
+    def _compute_gc_content(self, gc_correct, path_inputs, stepsize, binsize, genome_path, name, chrom_sizes, chrom_sizes_dict):
         """Compute GC-content"""
-        if not no_gc_content and path_inputs and self.gc_content_cov is None:
+        if gc_correct and path_inputs and self.gc_content_cov is None:
             print("Compute GC-content", file=sys.stderr)
             for i, cov in enumerate(self.covs):
                 inputfile = self.inputs[i] #1 to 1 mapping between input and cov
@@ -176,7 +176,7 @@ class MultiCoverageSet(DualCoverageSet):
         return np.sum([self.covs[i].coverage for i in range(self.dim_1 + self.dim_2)])
     
     def __init__(self, name, dims, regions, genome_path, binsize, stepsize, chrom_sizes, norm_regionset, \
-                 verbose, debug, no_gc_content, rmdup, path_bamfiles, exts, path_inputs, exts_inputs, \
+                 verbose, debug, gc_correct, rmdup, path_bamfiles, exts, path_inputs, exts_inputs, \
                  factors_inputs, chrom_sizes_dict, scaling_factors_ip, save_wig, strand_cov, housekeeping_genes,\
                  tracker, end, counter, gc_content_cov=None, avg_gc_content=None, gc_hist=None, output_bw=True,\
                  folder_report=None, report=None, save_input=False, m_threshold=80, a_threshold=95):
@@ -207,7 +207,7 @@ class MultiCoverageSet(DualCoverageSet):
         if self.count_positive_signal() < 1:
             self.no_data = True
             return None
-        self._compute_gc_content(no_gc_content, path_inputs, stepsize, binsize, genome_path, name, chrom_sizes, chrom_sizes_dict)
+        self._compute_gc_content(gc_correct, path_inputs, stepsize, binsize, genome_path, name, chrom_sizes, chrom_sizes_dict)
         self._normalization_by_input(path_bamfiles, path_inputs, name, factors_inputs, save_input)
         if save_input:
             self._output_input_bw(name, chrom_sizes, save_wig) 

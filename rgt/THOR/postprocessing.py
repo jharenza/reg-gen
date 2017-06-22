@@ -69,31 +69,29 @@ def merge_delete(ext_size, merge, peak_list, pvalue_list):
 #     peaks_gain = read_diffpeaks(path)
     regions_plus = GenomicRegionSet('regions') #pot. mergeable
     regions_minus = GenomicRegionSet('regions') #pot. mergeable
-    regions_unmergable = GenomicRegionSet('regions')
-    last_orientation = ""
+    #regions_unmergable = GenomicRegionSet('regions')
+    #last_orientation = ""  # the use of last_orientation ?? Not used..
+    # Maybe here , he wants to implement the orientation of genome??
 
-  #  print(ext_size)
-
- #   print('change ext_size smaller')
-  #  ext_size = 10
     for i, t in enumerate(peak_list):
         chrom, start, end, c1, c2, strand, ratio = t[0], t[1], t[2], t[3], t[4], t[5], t[6]
         r = GenomicRegion(chrom = chrom, initial = start, final = end, name = '', \
                           orientation = strand, data = str((c1, c2, pvalue_list[i], ratio)))
         if end - start > ext_size:
             if strand == '+':
-                if last_orientation == '+':
+              #  if last_orientation == '+':
                     regions_plus.add(r)
-                else:
-                    regions_unmergable.add(r)
+               # else:
+                #    regions_unmergable.add(r)
             elif strand == '-':
-                if last_orientation == '-':
+              #  if last_orientation == '-':
                     regions_minus.add(r)
-                else:
-                    regions_unmergable.add(r)
-
-
-                    
+               # else:
+               #     regions_unmergable.add(r)
+    # So it affects that all data is put into regions_unmergable
+    print('in merge_delete , the regions_minus and regions_plus are: ')
+    print(len(regions_minus))
+    print(len(regions_plus))
                     
     if merge:
         regions_plus.extend(ext_size/2, ext_size/2)
@@ -111,11 +109,11 @@ def merge_delete(ext_size, merge, peak_list, pvalue_list):
         results.add(el)
     for el in regions_minus:
         results.add(el)
-    for el in regions_unmergable:
-        results.add(el)
+    #for el in regions_unmergable:
+    #    results.add(el)
     results.sort()
 
-    print(len(results))
+   # print(len(results))
     
     return results
 
@@ -147,31 +145,51 @@ def filter_by_pvalue_strand_lag(ratios, pcutoff, pvalues, output, no_correction,
     return output, pvalues, filter_pass
 
 def _output_BED(name, output, pvalues, filter):
-    f = open(name + '_diffpeaks.bed', 'w')
+
+    ## DKF: I will change codes here to produce two files, one for lose, one for gain.
+    ## Anyway some small defaults: not try and catch sentences
+    #  f = open(name + '_diffpeaks.bed', 'w')
+    fgain = open(name + '_diffpeaks_gain.bed', 'w')
+    flose = open(name + '_diffpeaks_lose.bed', 'w')
      
     colors = {'+': '255,0,0', '-': '0,255,0'}
     bedscore = 1000
-    
+    true_strand = '.'
     for i in range(len(pvalues)):
         c, s, e, strand, counts = output[i]
         p_tmp = -log10(pvalues[i]) if pvalues[i] > 0 else sys.maxint
         counts = ';'.join(counts.split(';')[:2] + [str(p_tmp)])
         
         if filter[i]:
-            print(c, s, e, 'Peak' + str(i), bedscore, strand, s, e, colors[strand], 0, counts, sep='\t', file=f)
+            if strand == '+':
+                print(c, s, e, 'Peak' + str(i), bedscore, true_strand, s, e, colors[strand], 0, counts, sep='\t', file=fgain)
+            elif strand == '-':
+                print(c, s, e, 'Peak' + str(i), bedscore, true_strand, s, e, colors[strand], 0, counts, sep='\t', file=flose)
     
-    f.close()
+    fgain.close()
+    flose.close()
 
 def _output_narrowPeak(name, output, pvalues, filter):
     """Output in narrowPeak format,
     see http://genome.ucsc.edu/FAQ/FAQformat.html#format12"""
-    f = open(name + '_diffpeaks.narrowPeak', 'w')
+
+    ## Also to change it into two files
+    fgain = open(name + '_diffpeaks_gain.narrowPeak', 'w')
+    flose = open(name + '_diffpeaks_lose.narrowPeak', 'w')
+
+    true_strand = '.'
+    # f = open(name + '_diffpeaks.narrowPeak', 'w')
     for i in range(len(pvalues)):
         c, s, e, strand, _ = output[i]
         p_tmp = -log10(pvalues[i]) if pvalues[i] > 0 else sys.maxint
         if filter[i]:
-            print(c, s, e, 'Peak' + str(i), 0, strand, 0, p_tmp, 0, -1, sep='\t', file=f)
-    f.close()
+            if strand == '+':
+                print(c, s, e, 'Peak' + str(i), 0, true_strand, 0, p_tmp, 0, -1, sep='\t', file=fgain)
+            elif strand == '-':
+                print(c, s, e, 'Peak' + str(i), 0, true_strand, 0, p_tmp, 0, -1, sep='\t', file=flose)
+
+    fgain.close()
+    flose.close()
     
 def filter_deadzones(bed_deadzones, peak_regions):
     """Filter by peaklist by deadzones"""
@@ -186,10 +204,11 @@ if __name__ == '__main__':
     ext_size2 = int(sys.argv[2]) #100
     path = sys.argv[3] # '/home/manuel/merge_test.data'
     merge = sys.argv[4] #True #for histones
-    
+
+    #def merge_delete(ext_size, merge, peak_list, pvalue_list):
     regions = merge_delete(path, ext_size1, '+', merge)
     #regions_minus = merge_delete(path, ext_size2, '-', merge)
-    
+
     i = 0
     i = output(regions, i)
     #i = output(regions_minus, i, '-')

@@ -63,7 +63,7 @@ def train_HMM(region_giver, options, bamfiles, genome, chrom_sizes, dims, inputs
         exp_data = initialize(name=options.name, dims=dims, genome_path=genome, regions=train_regions,
                               stepsize=options.stepsize, binsize=options.binsize, bamfiles=bamfiles,
                               exts=options.exts, inputs=inputs, exts_inputs=options.exts_inputs,
-                              debug=options.debug, verbose=options.verbose, no_gc_content=options.no_gc_content,
+                              debug=options.debug, verbose=options.verbose, gc_correct=options.gc_correct,
                               factors_inputs=options.factors_inputs, chrom_sizes=chrom_sizes,
                               tracker=tracker, norm_regions=options.norm_regions,
                               scaling_factors_ip=options.scaling_factors_ip, save_wig=options.save_wig,
@@ -108,7 +108,7 @@ def run_HMM(region_giver, options, bamfiles, genome, chrom_sizes, dims, inputs, 
                               stepsize=options.stepsize, binsize=options.binsize,
                               bamfiles=bamfiles, exts=exp_data.exts, inputs=inputs,
                               exts_inputs=exp_data.exts_inputs, debug=options.debug,
-                              verbose=False, no_gc_content=options.no_gc_content,
+                              verbose=False, gc_correct=options.gc_correct,
                               factors_inputs=exp_data.factors_inputs, chrom_sizes=chrom_sizes,
                               tracker=tracker, norm_regions=options.norm_regions,
                               scaling_factors_ip=exp_data.scaling_factors_ip, save_wig=options.save_wig,
@@ -141,6 +141,7 @@ def run_HMM(region_giver, options, bamfiles, genome, chrom_sizes, dims, inputs, 
     res_output, res_pvalues, res_filter_pass = filter_by_pvalue_strand_lag(ratios, options.pcutoff, pvalues, output,
                                                                            options.no_correction, options.name,
                                                                            options.singlestrand)
+
     
     _output_BED(options.name, res_output, res_pvalues, res_filter_pass)
     _output_narrowPeak(options.name, res_output, res_pvalues, res_filter_pass)

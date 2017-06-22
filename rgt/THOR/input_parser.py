@@ -25,6 +25,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function
 from rgt.Util import npath
 from rgt.Util import GenomeData
+import errno
+import os
 
 
 def get_data_block(filepath, feature):
@@ -56,28 +58,11 @@ def input_parser(filepath):
     bamfiles_2 = get_data_block(filepath, "rep2")
     bamfiles_2 = map(npath, bamfiles_2)
 
-    # genome is optional, so if we get an empty list
-    # we set it to None, otherwise we normalise the path
-    genome = get_data_block(filepath, "genome")
-    genome = npath(genome) if genome else None
-
-
-    # the chrom sizes are not optional, but right now it's undefined
-    # what happens if the user doesn't specify them, or specifies more
-    # than one. So we just relay whatever we got from the file.
-
     ## read chrom_sizes from config.file
    # chrom_sizes = npath(get_data_block(filepath, "chrom_sizes"))
    # chrom_sizes = npath(chrom_sizes) if chrom_sizes else chrom_sizes
     ## read chrom_sizes from #organism argument
     organism_name = get_data_block(filepath, "organism") # get organism name
-    print(organism_name)
-    organism = GenomeData(organism=organism_name)
-    chrom_sizes = organism.get_chromosome_sizes()
-
-    ## Now read genome also through the #organism parameter..
-    # by default we use it, unless we mark no-gc-content
-    new_genome =  organism.get_genome()
 
     inputs1 = get_data_block(filepath, "inputs1")
     inputs1 = map(npath, inputs1)
@@ -92,40 +77,7 @@ def input_parser(filepath):
     else:
         inputs = inputs1 + inputs2
 
-    return bamfiles_1 + bamfiles_2, genome, chrom_sizes, inputs, dims
+    return bamfiles_1 + bamfiles_2, organism_name, inputs, dims
 
-
-def commandinput_parser(filepath, ):
-    # read first replicate and get the absolute file path
-    bamfiles_1 = get_data_block(filepath, "rep1")
-    bamfiles_1 = map(npath, bamfiles_1)
-
-    bamfiles_2 = get_data_block(filepath, "rep2")
-    bamfiles_2 = map(npath, bamfiles_2)
-
-    # genome is optional, so if we get an empty list
-    # we set it to None, otherwise we normalise the path
-    genome = get_data_block(filepath, "genome")
-    genome = npath(genome) if genome else None
-
-    # the chrom sizes are not optional, but right now it's undefined
-    # what happens if the user doesn't specify them, or specifies more
-    # than one. So we just relay whatever we got from the file.
-
-
-    inputs1 = get_data_block(filepath, "inputs1")
-    inputs1 = map(npath, inputs1)
-
-    inputs2 = get_data_block(filepath, "inputs2")
-    inputs2 = map(npath, inputs2)
-
-    dims = [len(bamfiles_1), len(bamfiles_2)]
-
-    if not inputs1 and not inputs2:
-        inputs = None
-    else:
-        inputs = inputs1 + inputs2
-
-    return bamfiles_1 + bamfiles_2, genome, chrom_sizes, inputs, dims
 
 

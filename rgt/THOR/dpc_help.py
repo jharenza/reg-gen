@@ -308,6 +308,10 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
         if states[i] not in [1,2]:
             continue #ignore background states
 
+
+        # here strand is used to represent the gain or lose peak...
+        # but we don't want it to mess with BED file format, so what could we get this information, and give them then??
+        # Firstly not just to split it into two files according to strand values..
         strand = '+' if states[i] == 1 else '-'
         cov1, cov2 = _get_covs(DCS, i, as_list=True)
         
@@ -321,7 +325,7 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
         #print(chrom, start, end)
 
         tmp_peaks.append((chrom, start, end, cov1, cov2, strand, cov1_strand, cov2_strand))
-        side = 'l' if strand == '+' else 'r'
+        side = 'l' if strand == '+' else 'r'  ### actually the use of side is also not clear..
         tmp_data.append((sum(cov1), sum(cov2), side, distr))
     
     if not tmp_data:
@@ -420,7 +424,7 @@ def get_all_chrom(bamfiles):
 
 
 def initialize(name, dims, genome_path, regions, stepsize, binsize, bamfiles, exts, \
-               inputs, exts_inputs, factors_inputs, chrom_sizes, verbose, no_gc_content, \
+               inputs, exts_inputs, factors_inputs, chrom_sizes, verbose, gc_correct, \
                tracker, debug, norm_regions, scaling_factors_ip, save_wig, housekeeping_genes, \
                test, report, chrom_sizes_dict, counter, end, gc_content_cov=None, avg_gc_content=None, \
                gc_hist=None, output_bw=True, save_input=False, m_threshold=80, a_threshold=95, rmdup=False):
@@ -440,7 +444,7 @@ def initialize(name, dims, genome_path, regions, stepsize, binsize, bamfiles, ex
                                      binsize=binsize, stepsize=stepsize, rmdup=rmdup, path_bamfiles=bamfiles,
                                      path_inputs=inputs, exts=exts, exts_inputs=exts_inputs,
                                      factors_inputs=factors_inputs, chrom_sizes=chrom_sizes, verbose=verbose,
-                                     no_gc_content=no_gc_content, chrom_sizes_dict=chrom_sizes_dict, debug=debug,
+                                     gc_correct=gc_correct, chrom_sizes_dict=chrom_sizes_dict, debug=debug,
                                      norm_regionset=norm_regionset, scaling_factors_ip=scaling_factors_ip,
                                      save_wig=save_wig, strand_cov=True, housekeeping_genes=housekeeping_genes,
                                      tracker=tracker, gc_content_cov=gc_content_cov, avg_gc_content=avg_gc_content,
@@ -555,7 +559,7 @@ def handle_input():
                           "signal. [default: %default]")
     group.add_option("--debug", default=False, dest="debug", action="store_true",
                      help="Output debug information. Warning: space consuming! [default: %default]")
-    group.add_option("--no-gc-content", dest="no_gc_content", default=False, action="store_true",
+    group.add_option("--no-gc-content", dest="gc_correct", default=True, action="store_true",
                      help="Do not normalize towards GC content. [default: %default]")
     group.add_option("--norm-regions", default=None, dest="norm_regions", type="str",
                      help="Restrict normalization to particular regions (BED format). [default: %default]")
@@ -598,7 +602,7 @@ def handle_input():
         config_path = npath(args[0])
         if isfile(config_path):
             # parser.error("Config file %s does not exist!" % config_path)
-            bamfiles, genome, chrom_sizes, inputs, dims = input_parser(config_path)
+                 bamfiles, organism_name, inputs, dims = input_parser(config_path)
         else:
             parser.error("Config file %s does not exist!" % config_path)
     else:
@@ -608,31 +612,13 @@ def handle_input():
         if not options.bamfiles1 or not options.bamfiles2:
             parser.error('BamFiles not given')
         else:
-            # how to extract the files and give them to bamfiles list
-           # print('what we get at first')
-           # print(options.bamfiles1 + options.bamfiles2)
-          #  bam_tmp = map(lambda x: x.split(','), options.bamfiles)
-          #  print('temporary file for bam files')
-          #  print(bam_tmp)
+
             bamfiles = options.bamfiles1 + options.bamfiles2
             dims = [len(options.bamfiles1), len(options.bamfiles2)]
-           # print(dims)
-         #   dims = [len(bam_tmp[0]), len(bam_tmp[1])]
-          #  bamfiles = map(npath, bam_tmp[0] + bam_tmp[1])
 
         if not options.organism:
             parser.error('Organism not given')
-        else:
-            organism = GenomeData(organism=options.organism)
-            print('organism is %s'%organism)
-            chrom_sizes = organism.get_chromosome_sizes()
-
-        genome = None
-        if options.genome:
-            print('options.genome is ')
-            print(options.genome)
-            genome = npath(options.genome)
-            print('genome is %s, means ?'%genome)
+        organism_name = options.organism
 
         # set inputs parameters
         inputs = None
@@ -643,10 +629,17 @@ def handle_input():
     # Now we want to change to command line methods..and I would like to define another function
     # with function there is a problem that we need to pass a lot of parameters. then at first write here to achieve this
 
-    # set genome parameter
+    organism = GenomeData(organism=organism_name)
 
-    if not genome:
-        options.no_gc_content = True
+    if organism is None:
+        parser.error("organism doesn't exist, please install it firstly")
+
+    chrom_sizes = organism.get_chromosome_sizes()
+    if not options.gc_correct:
+        genome = None
+    else:
+        genome = organism.get_genome()
+
 
     if options.exts and len(options.exts) != len(bamfiles):
         parser.error("Number of Extension Sizes must equal number of bamfiles")
@@ -662,7 +655,7 @@ def handle_input():
    # print(bamfiles)
     for bamfile in bamfiles:
         if not isfile(bamfile):
-            parser.error("DKF BAM file %s does not exist!" % bamfile)
+            parser.error(" BAM file %s does not exist!" % bamfile)
 
     if not inputs and options.factors_inputs:
         print("As no input-DNA, do not use input-DNA factors", file=sys.stderr)
@@ -679,9 +672,6 @@ def handle_input():
     if options.regions:
         if not isfile(options.regions):
             parser.error("Region file %s does not exist!" % options.regions)
-
-    if genome and not isfile(genome):
-        parser.error("Genome file %s does not exist!" % genome)
 
     # This code defines the name for file name using time stamp.
     #
@@ -705,10 +695,14 @@ def handle_input():
                 map(lambda x: x.startswith(options.name), os.listdir(options.outputdir))) > 0:
             parser.error("Output directory exists and contains files with names starting with your chosen experiment "
                          "name! Do nothing to prevent file overwriting!")
-        if not exists(options.outputdir):
-            os.mkdir(options.outputdir)
     else:
-        options.outputdir = os.getcwd()
+        ## here we create the folder by default using the labels...Not necessary
+        options.outputdir = os.getcwd() +'/'+ options.name + '/'
+
+    if not exists(options.outputdir):
+        os.mkdir(options.outputdir)
+
+    print(options.outputdir)
 
     options.name = join(options.outputdir, options.name)
 
@@ -739,7 +733,7 @@ def handle_input():
         print("Warning: Do not compute GC-content, as there is no input file", file=sys.stderr)
 
     if not genome:
-        print("Warning: Do not compute GC-content, as there is no genome file", file=sys.stderr)
+        print("Warning: Do not compute GC-content, cause gc-correct is False", file=sys.stderr)
 
     if options.exts is None:
         options.exts = []
