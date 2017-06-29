@@ -26,6 +26,7 @@ from __future__ import print_function
 from rgt.GenomicRegion import GenomicRegion
 from rgt.GenomicRegionSet import GenomicRegionSet
 import sys
+import os
 # import re
 from scipy.stats.mstats import zscore
 from rgt.motifanalysis.Statistics import multiple_test_correction
@@ -89,9 +90,6 @@ def merge_delete(ext_size, merge, peak_list, pvalue_list):
                # else:
                #     regions_unmergable.add(r)
     # So it affects that all data is put into regions_unmergable
-    print('in merge_delete , the regions_minus and regions_plus are: ')
-    print(len(regions_minus))
-    print(len(regions_plus))
                     
     if merge:
         regions_plus.extend(ext_size/2, ext_size/2)
@@ -112,8 +110,6 @@ def merge_delete(ext_size, merge, peak_list, pvalue_list):
     #for el in regions_unmergable:
     #    results.add(el)
     results.sort()
-
-   # print(len(results))
     
     return results
 
@@ -149,48 +145,90 @@ def _output_BED(name, output, pvalues, filter):
     ## DKF: I will change codes here to produce two files, one for lose, one for gain.
     ## Anyway some small defaults: not try and catch sentences
     #  f = open(name + '_diffpeaks.bed', 'w')
+
+    ## 23 Juni also here to add gene names to it..
     fgain = open(name + '_diffpeaks_gain.bed', 'w')
     flose = open(name + '_diffpeaks_lose.bed', 'w')
      
     colors = {'+': '255,0,0', '-': '0,255,0'}
     bedscore = 1000
     true_strand = '.'
-    for i in range(len(pvalues)):
-        c, s, e, strand, counts = output[i]
+
+    for i in range(len(pvalues)): ## add name parameter here
+
+        c, s, e, name,  strand, counts = output[i].chrom, output[i].initial, output[i].final,  output[i].name, output[i].orientation, output[i].data
         p_tmp = -log10(pvalues[i]) if pvalues[i] > 0 else sys.maxint
         counts = ';'.join(counts.split(';')[:2] + [str(p_tmp)])
-        
+
         if filter[i]:
             if strand == '+':
-                print(c, s, e, 'Peak' + str(i), bedscore, true_strand, s, e, colors[strand], 0, counts, sep='\t', file=fgain)
+                print(c, s, e, 'Peak' + str(i) + '_' + name, bedscore, true_strand, s, e, colors[strand], 0, counts, sep='\t', file=fgain)
             elif strand == '-':
-                print(c, s, e, 'Peak' + str(i), bedscore, true_strand, s, e, colors[strand], 0, counts, sep='\t', file=flose)
+                print(c, s, e, 'Peak' + str(i) + '_' + name, bedscore, true_strand, s, e, colors[strand], 0, counts, sep='\t', file=flose)
     
     fgain.close()
     flose.close()
+
 
 def _output_narrowPeak(name, output, pvalues, filter):
     """Output in narrowPeak format,
     see http://genome.ucsc.edu/FAQ/FAQformat.html#format12"""
 
     ## Also to change it into two files
-    fgain = open(name + '_diffpeaks_gain.narrowPeak', 'w')
-    flose = open(name + '_diffpeaks_lose.narrowPeak', 'w')
+    fgain = open(name + '_diffpeaks_gain.narrowPeak.bed', 'w')
+    flose = open(name + '_diffpeaks_lose.narrowPeak.bed', 'w')
 
     true_strand = '.'
     # f = open(name + '_diffpeaks.narrowPeak', 'w')
     for i in range(len(pvalues)):
-        c, s, e, strand, _ = output[i]
+        # c, s, e, name, strand, _ = output[i]
+        c, s, e, name, strand, _ = output[i].chrom, output[i].initial, output[i].final,  output[i].name, output[i].orientation, \
+                                        output[i].data
         p_tmp = -log10(pvalues[i]) if pvalues[i] > 0 else sys.maxint
         if filter[i]:
             if strand == '+':
-                print(c, s, e, 'Peak' + str(i), 0, true_strand, 0, p_tmp, 0, -1, sep='\t', file=fgain)
+                print(c, s, e, 'Peak' + str(i)+ '_' + name, 0, true_strand, 0, p_tmp, 0, -1, sep='\t', file=fgain)
             elif strand == '-':
-                print(c, s, e, 'Peak' + str(i), 0, true_strand, 0, p_tmp, 0, -1, sep='\t', file=flose)
+                print(c, s, e, 'Peak' + str(i) + '_' +name, 0, true_strand, 0, p_tmp, 0, -1, sep='\t', file=flose)
 
     fgain.close()
     flose.close()
-    
+
+ ## here we reads bed files and generate them again , including bed files and narrow_peaks files
+def bed2associated_genes(ouput_dir, organism_name):
+    """
+    Add genes name in bed or narrowpeaks files
+    Input: would be file directory
+    :return: success signal, if it works fine for this transformation
+    """
+    if os.path.isfile(ouput_dir):
+        regionset = GenomicRegionSet("bed")
+        regionset.read_bed(ouput_dir)
+        gr = regionset.gene_association(organism=organism_name, promoterLength=1000,
+                                        threshDist=500000, show_dis=True)
+        regionset.replace_region_name(gr, combine=True)
+
+        regionset.write_bed(ouput_dir)
+
+    elif os.path.isdir(ouput_dir):
+        for root, dirnames, filenames in os.walk(ouput_dir):
+
+            for filename in filenames:
+                if ".bed" in filename:
+                    print(filename)
+                    fnn = os.path.basename(filename)
+                    try:
+                        regionset = GenomicRegionSet("bed")
+                        regionset.read_bed(os.path.join(ouput_dir, fnn))
+                        gr = regionset.gene_association(organism=organism_name, promoterLength=1000,
+                                                        threshDist=500000, show_dis=True)
+                        regionset.replace_region_name(gr, combine=True)
+                        regionset.write_bed(fnn)
+
+                    except:
+                        pass
+
+
 def filter_deadzones(bed_deadzones, peak_regions):
     """Filter by peaklist by deadzones"""
     deadzones = GenomicRegionSet('deadzones')

@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 @author: Manuel Allhoff
-@modifier: Kefang Ding
+@modifier: Kefang Ding from May 2017
 """
 
 from __future__ import print_function

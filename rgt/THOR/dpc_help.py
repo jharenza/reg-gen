@@ -42,7 +42,6 @@ from rgt.Util import GenomeData
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 
-
 FOLDER_REPORT = None
 
 
@@ -320,9 +319,6 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
         
         chrom, start, end = DCS._index2coordinates(DCS.indices_of_interest[i])
 
-        # test the start and end size..
-        #print('chrom , start and end are : ')
-        #print(chrom, start, end)
 
         tmp_peaks.append((chrom, start, end, cov1, cov2, strand, cov1_strand, cov2_strand))
         side = 'l' if strand == '+' else 'r'  ### actually the use of side is also not clear..
@@ -351,7 +347,8 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
     ratios = []
     main_sep = ':' #sep <counts> main_sep <counts> main_sep <pvalue>
     int_sep = ';' #sep counts in <counts>
-    
+
+
     for i, el in enumerate(regions):
         tmp = el.data.split(',')
         counts = ",".join(tmp[0:len(tmp)-1]).replace('], [', int_sep).replace('], ', int_sep).replace('([', '').replace(')', '').replace(', ', main_sep)
@@ -360,9 +357,8 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
         pvalues.append(pvalue)
         ratios.append(ratio)
         output.append((el.chrom, el.initial, el.final, el.orientation, counts))
-    
-    return ratios, pvalues, output
 
+    return ratios, pvalues, output
 
 def _output_ext_data(ext_data_list, bamfiles):
     """Output textfile and png file of read size estimation"""
@@ -741,7 +737,7 @@ def handle_input():
     if options.exts_inputs is None:
         options.exts_inputs = []
 
-    return options, bamfiles, genome, chrom_sizes, dims, inputs
+    return options, bamfiles, genome, organism_name, chrom_sizes, dims, inputs
 
 
 if __name__ == '__main__':

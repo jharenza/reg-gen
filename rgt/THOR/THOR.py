@@ -29,10 +29,13 @@ import sys
 # Internal
 from dpc_help import get_peaks, _fit_mean_var_distr, initialize, merge_output, handle_input
 from tracker import Tracker
-from postprocessing import _output_BED, _output_narrowPeak
+from postprocessing import _output_BED, _output_narrowPeak, bed2associated_genes
 from rgt.THOR.neg_bin_rep_hmm import NegBinRepHMM, get_init_parameters, _get_pvalue_distr
 from rgt.THOR.RegionGiver import RegionGiver
 from rgt.THOR.postprocessing import filter_by_pvalue_strand_lag
+from rgt.GenomicRegionSet import GenomicRegionSet
+from rgt.GenomicRegion import GenomicRegion
+
 from rgt import __version__
 
 # External
@@ -95,11 +98,12 @@ def train_HMM(region_giver, options, bamfiles, genome, chrom_sizes, dims, inputs
     return m, exp_data, func_para, init_mu, init_alpha, distr
 
 
-def run_HMM(region_giver, options, bamfiles, genome, chrom_sizes, dims, inputs, tracker, exp_data, m, distr):
+def run_HMM(region_giver, options, bamfiles, genome, organism_name, chrom_sizes, dims, inputs, tracker, exp_data, m, distr):
     """Run trained HMM chromosome-wise on genomic signal and call differential peaks"""
     output, pvalues, ratios, no_bw_files = [], [], [], []
     print("Compute HMM's posterior probabilities and Viterbi path to call differential peaks", file=sys.stderr)
-    
+
+
     for i, r in enumerate(region_giver):
         end = True if i == len(region_giver) - 1 else False
         print("- taking into account %s" % r.sequences[0].chrom, file=sys.stderr)
@@ -137,12 +141,32 @@ def run_HMM(region_giver, options, bamfiles, genome, chrom_sizes, dims, inputs, 
         output += inst_output
         pvalues += inst_pvalues
         ratios += inst_ratios
-    
+        # read_bed: z.add(GenomicRegion(chrom, start, end, name, orientation, data))
+        # getpeak:  output.append((el.chrom, el.initial, el.final, el.orientation, counts))
+
+    ## Here is the place to create the output files which is
+    ## output.append((el.chrom, el.initial, el.final, el.orientation, counts)), so the names of it just the this info..
+    ## we could change it here,
+    # firstly to generate GenomicSet again and use the association function and add the names already there, and done
+    ## how could we get it organism ?? Integrated??
+
+    peakregset = GenomicRegionSet("peaks")
+    for item in output:
+        # print(item)
+        peakregset.add(
+            GenomicRegion(item[0], item[1], int(item[2]), '', item[3], item[4]))
+
+    output = peakregset.gene_association(organism=organism_name, promoterLength=1000,
+                                             threshDist=500000, show_dis=True)
+
+
     res_output, res_pvalues, res_filter_pass = filter_by_pvalue_strand_lag(ratios, options.pcutoff, pvalues, output,
                                                                            options.no_correction, options.name,
                                                                            options.singlestrand)
 
-    
+
+
+
     _output_BED(options.name, res_output, res_pvalues, res_filter_pass)
     _output_narrowPeak(options.name, res_output, res_pvalues, res_filter_pass)
     
@@ -150,13 +174,14 @@ def run_HMM(region_giver, options, bamfiles, genome, chrom_sizes, dims, inputs, 
 
 
 def main():
-    options, bamfiles, genome, chrom_sizes, dims, inputs = handle_input()
+    options, bamfiles, genome, organism_name, chrom_sizes, dims, inputs = handle_input()
 
     tracker = Tracker(options.name + '_setup.info', bamfiles, genome, chrom_sizes, dims, inputs, options, __version__)
     region_giver = RegionGiver(chrom_sizes, options.regions)
     m, exp_data, func_para, init_mu, init_alpha, distr = train_HMM(region_giver, options, bamfiles, genome,
                                                                    chrom_sizes, dims, inputs, tracker)
     
-    run_HMM(region_giver, options, bamfiles, genome, chrom_sizes, dims, inputs, tracker, exp_data, m, distr)
-    
+    run_HMM(region_giver, options, bamfiles, genome, organism_name,  chrom_sizes, dims, inputs, tracker, exp_data, m, distr)
+
+    # bed2associated_genes(options.outputdir, organism_name), it is used to deal with the output files
     _write_info(tracker, options.report, func_para=func_para, init_mu=init_mu, init_alpha=init_alpha, m=m)
