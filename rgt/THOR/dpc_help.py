@@ -298,7 +298,10 @@ def _get_covs(DCS, i, as_list=False):
 
 
 def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correction, deadzones, merge_bin, p=70):
-    """Merge Peaks, compute p-value and give out *.bed and *.narrowPeak"""
+    """Merge Peaks, compute p-value and give out *.bed and *.narrowPeak
+    pcutoff is used to ??
+    p : filter the peaks to get the most significant peaks..
+    """
     exts = np.mean(exts)
     tmp_peaks = []
     tmp_data = []
