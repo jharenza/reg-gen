@@ -140,15 +140,15 @@ def filter_by_pvalue_strand_lag(ratios, pcutoff, pvalues, output, no_correction,
     
     return output, pvalues, filter_pass
 
-def _output_BED(name, output, pvalues, filter):
+def _output_BED(filename_prefix, output, pvalues, filter):
 
     ## DKF: I will change codes here to produce two files, one for lose, one for gain.
     ## Anyway some small defaults: not try and catch sentences
     #  f = open(name + '_diffpeaks.bed', 'w')
 
     ## 23 Juni also here to add gene names to it..
-    fgain = open(name + '_diffpeaks_gain.bed', 'w')
-    flose = open(name + '_diffpeaks_lose.bed', 'w')
+    fgain = open(filename_prefix + '_diffpeaks_gain.bed', 'w')
+    flose = open(filename_prefix + '_diffpeaks_lose.bed', 'w')
      
     colors = {'+': '255,0,0', '-': '0,255,0'}
     bedscore = 1000

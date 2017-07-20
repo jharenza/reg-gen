@@ -249,6 +249,8 @@ def _get_log_ratio(l1, l2):
 def _merge_consecutive_bins(tmp_peaks, distr, merge=True):
     """Merge consecutive peaks and compute p-value. Return list
     <(chr, s, e, c1, c2, strand)> and <(pvalue)>"""
+    nopcutoff_peaks = {}
+    nopcutoff_pvalues = {}
     peaks = []
     pvalues = []
     i, j, = 0, 0
@@ -279,9 +281,107 @@ def _merge_consecutive_bins(tmp_peaks, distr, merge=True):
 
     pvalues = map(_compute_pvalue, pvalues)
     assert len(pvalues) == len(peaks)
+    # we define all output format for the data
+    nopcutoff_pvalues['all'] = pvalues
+    nopcutoff_peaks['all'] = peaks
+    return nopcutoff_pvalues, nopcutoff_peaks
 
-    return pvalues, peaks
-    
+
+def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
+    """ we calculate firstly p-values for each bin and then filter them using pcutoff values,
+    at end we merge bins with similar p-values
+    pcutoff: two format, one is just one value, secondly, one array, [start, end, steps]
+    then above them, we get it, and then merge them..
+
+    :tem_peaks
+        tmp_peaks.append((chrom, start, end, cov1, cov2, strand, cov1_strand, cov2_strand))
+        c, s, e, c1, c2, strand, strand_pos, strand_neg = tmp_peaks[i]
+    :return
+        ratio = _get_log_ratio(tmp_pos, tmp_neg)
+        peaks.append((c, s, e, v1, v2, strand, ratio))
+        pvalues = map(_compute_pvalue, pvalues)
+    """
+
+    pcutoff_peaks = {}
+    pcutoff_pvalues = {}
+
+    if len(pcutoff) == 3:
+        pvalue_init, pvalue_end, pvalue_step = pcutoff[0], pcutoff[1],pcutoff[3]
+        if pvalue_end > sys.maxint:
+            pvalue_end = sys.maxint
+    elif len(pcutoff) == 1:
+        pvalue_init, pvalue_end, pvalue_step = pcutoff[0], pcutoff[0] + 1, 1
+
+    for i in range(pvalue_init, pvalue_end, pvalue_step):
+        new = 0
+        new_peaks = []
+        new_pvalues = []
+        pi_peaks = []
+        pi_pvalues = []
+        for j in range(len(bin_pvalues)):
+            if bin_pvalues[j] >= i:
+                new_pvalues.append(bin_pvalues[j])
+                new_peaks.append(tmp_peaks[j])
+
+        if new_pvalues is None:
+            print('the setting of end filter p-value is too big')
+            pcutoff_peaks['p_value_over_' + i] = pi_peaks
+            pcutoff_pvalues['p_value_over_' + i] = pi_pvalues
+            return pcutoff_peaks, pcutoff_pvalues
+
+        for k in range(len(new_peaks)):
+            chrom, s, e, ct1, ct2, strand, strand_pos, strand_neg = new_peaks[k]
+            if new == 0:
+                current_chr = chrom
+                current_e = e
+                current_strand = strand
+                current_ct1 = ct1
+                current_ct2 = ct2
+                curretn_strand_pos = [strand_pos]
+                curretn_strand_neg = [strand_neg]
+                current_pvalue = new_pvalues[k]
+                new += 1
+            else:
+                if (current_chr == chrom) & (current_strand == strand) & (current_e >= s):
+                    current_e = e
+                    # if (numpy.argmax([pvalue,current_pvalue])==0):
+                    current_pvalue.append(new_pvalues[k])
+                    current_ct1 += ct1
+                    current_ct2 += ct2
+                    curretn_strand_pos += [strand_pos]
+                    curretn_strand_neg += [strand_neg]
+                    new += 1
+                else:
+                    # current_ct1=current_ct1/new
+                    # current_ct2=current_ct2/new
+                    current_pvalue.sort(reverse=True)
+                    # print(current_pvalue)
+                    p = - min([np.log10(new) - x - np.log10(j + 1) for j, x in enumerate(current_pvalue)])
+                    ratio = _get_log_ratio(curretn_strand_pos, curretn_strand_neg)
+                    pi_peaks.append((current_chr, s, current_e, current_ct1, current_ct2, current_strand, ratio))
+                    pi_pvalues.append(p)
+
+                    current_chr = chrom
+                    current_e = e
+                    current_strand = strand
+                    current_ct1 = ct1
+                    current_ct2 = ct2
+                    curretn_strand_pos = [strand_pos]
+                    curretn_strand_neg = [strand_neg]
+                    current_pvalue = new_pvalues[k]
+
+        current_pvalue.sort(reverse=True)
+        p = - min([np.log10(new) - x - np.log10(j + 1) for j, x in enumerate(current_pvalue)])
+        ratio = _get_log_ratio(curretn_strand_pos, curretn_strand_neg)
+        pi_peaks.append((current_chr, s, current_e, current_ct1, current_ct2, current_strand, ratio))
+        pi_pvalues.append(p)
+
+        pcutoff_peaks['p_value_'+i] = pi_peaks
+        pcutoff_pvalues['p_value_'+i] = pi_pvalues
+
+    return  pcutoff_pvalues, pcutoff_peaks
+
+
 
 def _get_covs(DCS, i, as_list=False):
     """For a multivariant Coverageset, return mean coverage cov1 and cov2 at position i"""
@@ -330,36 +430,65 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
     if not tmp_data:
         print('no data', file=sys.stderr)
         return [], [], []
-    
+
+    # here to calculate p-value for each bin, then get the 70% neg_log(p-values), which means smaller p-values,
+    # after that, we combine them to new data..
+
     tmp_pvalues = map(_compute_pvalue, tmp_data)
     per = np.percentile(tmp_pvalues, p)
     
     tmp = []
+    bin_pvalues = []
     res = tmp_pvalues > per
     for j in range(len(res)):
         if res[j]:
             tmp.append(tmp_peaks[j])
+            bin_pvalues.append(tmp_pvalues[j])
     tmp_peaks = tmp
 
-    pvalues, peaks, = _merge_consecutive_bins(tmp_peaks, distr, merge_bin) #merge consecutive peaks and compute p-value
-    regions = merge_delete(exts, merge, peaks, pvalues) #postprocessing, returns GenomicRegionSet with merged regions
-    if deadzones:
-        regions = filter_deadzones(deadzones, regions)
-    output = []
-    pvalues = []
-    ratios = []
-    main_sep = ':' #sep <counts> main_sep <counts> main_sep <pvalue>
-    int_sep = ';' #sep counts in <counts>
+
+    # From here we give different choices, one is to use the old one A, one is for the new method B with pcutoff
+    if pcutoff is None:
+        pvalues, peaks = _merge_consecutive_bins(tmp_peaks, distr, merge_bin) #merge consecutive peaks by coverage number integer, and compute p-value
+
+    else:
+        # we use pcutoff values to new method B, we get p-values already from this part, better to pass directly
+        pvalues, peaks = _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff)
 
 
-    for i, el in enumerate(regions):
-        tmp = el.data.split(',')
-        counts = ",".join(tmp[0:len(tmp)-1]).replace('], [', int_sep).replace('], ', int_sep).replace('([', '').replace(')', '').replace(', ', main_sep)
-        pvalue = float(tmp[len(tmp)-2].replace(")", "").strip())
-        ratio = float(tmp[len(tmp)-1].replace(")", "").strip())
-        pvalues.append(pvalue)
-        ratios.append(ratio)
-        output.append((el.chrom, el.initial, el.final, el.orientation, counts))
+    # since using dictionary, the best way is to make old into old fashion
+    # we define another dictionary item for it..'all' means nopcutoff..
+
+    # this is code whic is used in merge_delete
+    # chrom, start, end, c1, c2, strand, ratio = t[0], t[1], t[2], t[3], t[4], t[5], t[6]
+    #   r = GenomicRegion(chrom = chrom, initial = start, final = end, name = '', \
+    #                     orientation = strand, data = str((c1, c2, pvalue_list[i], ratio)))
+    # after this, we also need to define different output,
+    output = {}
+    pvalues = {}
+    ratios = {}
+
+    for pi_value in pvalues.keys():
+
+        regions = merge_delete(exts, merge, peaks[pi_value], pvalues[pi_value]) #postprocessing, returns GenomicRegionSet with merged regions
+        if deadzones:
+            regions = filter_deadzones(deadzones, regions)
+
+        output[pi_value] = []
+        pvalues[pi_value] = []
+        ratios[pi_value] = []
+        main_sep = ':' #sep <counts> main_sep <counts> main_sep <pvalue>
+        int_sep = ';' #sep counts in <counts>
+
+
+        for i, el in enumerate(regions):
+            tmp = el.data.split(',')
+            counts = ",".join(tmp[0:len(tmp)-1]).replace('], [', int_sep).replace('], ', int_sep).replace('([', '').replace(')', '').replace(', ', main_sep)
+            pvalue = float(tmp[len(tmp)-2].replace(")", "").strip())
+            ratio = float(tmp[len(tmp)-1].replace(")", "").strip())
+            pvalues[pi_value].append(pvalue)
+            ratios[pi_value].append(ratio)
+            output[pi_value].append((el.chrom, el.initial, el.final, el.orientation, counts))
 
     return ratios, pvalues, output
 
