@@ -54,9 +54,14 @@ def input_parser(filepath):
     # read first replicate and get the absolute file path
     bamfiles_1 = get_data_block(filepath, "rep1")
     bamfiles_1 = map(npath, bamfiles_1)
+    # replicate samples
+    if len(bamfiles_1) == 1:
+        bamfiles_1.append(bamfiles_1)
 
     bamfiles_2 = get_data_block(filepath, "rep2")
     bamfiles_2 = map(npath, bamfiles_2)
+    if len(bamfiles_2) == 1:
+        bamfiles_2.append(bamfiles_2)
 
     ## read chrom_sizes from config.file
    # chrom_sizes = npath(get_data_block(filepath, "chrom_sizes"))

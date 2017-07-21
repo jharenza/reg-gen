@@ -29,7 +29,7 @@ import sys
 # Internal
 from dpc_help import get_peaks, _fit_mean_var_distr, initialize, merge_output, handle_input
 from tracker import Tracker
-from postprocessing import _output_BED, _output_narrowPeak, bed2associated_genes
+from postprocessing import _output_BED, _output_narrowPeak, _output_empty_BED
 from rgt.THOR.neg_bin_rep_hmm import NegBinRepHMM, get_init_parameters, _get_pvalue_distr
 from rgt.THOR.RegionGiver import RegionGiver
 from rgt.THOR.postprocessing import filter_by_pvalue_strand_lag
@@ -100,9 +100,10 @@ def train_HMM(region_giver, options, bamfiles, genome, chrom_sizes, dims, inputs
 
 def run_HMM(region_giver, options, bamfiles, genome, organism_name, chrom_sizes, dims, inputs, tracker, exp_data, m, distr):
     """Run trained HMM chromosome-wise on genomic signal and call differential peaks"""
-    output, pvalues, ratios, no_bw_files = [], [], [], []
+    # output, pvalues, ratios, no_bw_files = [], [], [], []
     print("Compute HMM's posterior probabilities and Viterbi path to call differential peaks", file=sys.stderr)
-
+    pcutoff_output, pcutoff_pvalues, pcutoff_ratios = {}, {}, {}
+    no_bw_files = []
 
     for i, r in enumerate(region_giver):
         end = True if i == len(region_giver) - 1 else False
@@ -123,7 +124,6 @@ def run_HMM(region_giver, options, bamfiles, genome, organism_name, chrom_sizes,
                               rmdup=options.rmdup)
         if exp_data.no_data:
             continue
-        
         no_bw_files.append(i)
         exp_data.compute_putative_region_index()
 
@@ -138,9 +138,23 @@ def run_HMM(region_giver, options, bamfiles, genome, organism_name, chrom_sizes,
                                                            no_correction=options.no_correction,
                                                            merge_bin=options.merge_bin, deadzones=options.deadzones)
 
+        # 21 July 2017
+        # cause I change output as dictionary, so this should change to dictionary addition
+        # output just for old method A is to do:
+        for pi_value in inst_output.keys():
+            if pi_value not in pcutoff_output.keys():
+                pcutoff_output[pi_value] = []
+                pcutoff_pvalues[pi_value] = []
+                pcutoff_ratios[pi_value] = []
+
+            pcutoff_output[pi_value] += inst_output[pi_value]
+            pcutoff_pvalues[pi_value] += inst_pvalues[pi_value]
+            pcutoff_ratios[pi_value] += inst_ratios[pi_value]
+        """
         output += inst_output
         pvalues += inst_pvalues
         ratios += inst_ratios
+        """
         # read_bed: z.add(GenomicRegion(chrom, start, end, name, orientation, data))
         # getpeak:  output.append((el.chrom, el.initial, el.final, el.orientation, counts))
 
@@ -150,26 +164,39 @@ def run_HMM(region_giver, options, bamfiles, genome, organism_name, chrom_sizes,
     # firstly to generate GenomicSet again and use the association function and add the names already there, and done
     ## how could we get it organism ?? Integrated??
 
-    peakregset = GenomicRegionSet("peaks")
-    for item in output:
-        # print(item)
-        peakregset.add(
-            GenomicRegion(item[0], item[1], int(item[2]), '', item[3], item[4]))
+    ## 21 July 2017
+    # need to deal with dictionary data..one by one is the best way..
+    res_output, res_pvalues, res_filter_pass = {}, {}, {}
+    for pi_value in pcutoff_output.keys():
+        print('keys in result are: ')
+        print(pi_value)
+        ## add confition if pi_value is empty, we give empty output directly
+        if pcutoff_output[pi_value] is None:
+            _output_empty_BED(options.name + '_' + pi_value)
+            break
 
-    output = peakregset.gene_association(organism=organism_name, promoterLength=1000,
-                                             threshDist=500000, show_dis=True)
+        peakregset = GenomicRegionSet(pi_value+"_peaks")
+        for item in pcutoff_output[pi_value]:
+            # print(item)
+            peakregset.add(
+                GenomicRegion(item[0], item[1], int(item[2]), '', item[3], item[4]))
 
+        pcutoff_output[pi_value] = peakregset.gene_association(organism=organism_name, promoterLength=1000,
+                                                 threshDist=500000, show_dis=True)
+        res_output[pi_value], res_pvalues[pi_value], res_filter_pass[pi_value] = filter_by_pvalue_strand_lag(pcutoff_ratios[pi_value], options.p_fdr_correction, pcutoff_pvalues[pi_value],
+                                                                               pcutoff_output[pi_value],
+                                                                               options.no_correction, options.name,
+                                                                               options.singlestrand)
 
-    res_output, res_pvalues, res_filter_pass = filter_by_pvalue_strand_lag(ratios, options.pcutoff, pvalues, output,
-                                                                           options.no_correction, options.name,
-                                                                           options.singlestrand)
+        print('progress before output_BED files')
+        _output_BED(options.name+'_'+pi_value, res_output[pi_value], res_pvalues[pi_value], res_filter_pass[pi_value])
+        print('progress before narrow output_BED files')
+        _output_narrowPeak(options.name+'_'+pi_value, res_output[pi_value], res_pvalues[pi_value], res_filter_pass[pi_value])
 
+    # res_output, res_pvalues, res_filter_pass = filter_by_pvalue_strand_lag(ratios, options.p_fdr_corretion, pvalues, output,
+    #                                                                       options.no_correction, options.name,
+    #                                                                      options.singlestrand)
 
-
-
-    _output_BED(options.name, res_output, res_pvalues, res_filter_pass)
-    _output_narrowPeak(options.name, res_output, res_pvalues, res_filter_pass)
-    
     merge_output(bamfiles, dims, options, no_bw_files, chrom_sizes)
 
 
@@ -185,3 +212,6 @@ def main():
 
     # bed2associated_genes(options.outputdir, organism_name), it is used to deal with the output files
     _write_info(tracker, options.report, func_para=func_para, init_mu=init_mu, init_alpha=init_alpha, m=m)
+
+if __name__ == "__main__":
+    main()

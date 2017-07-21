@@ -46,6 +46,7 @@ FOLDER_REPORT = None
 
 
 def merge_output(bamfiles, dims, options, no_bw_files, chrom_sizes):
+    """it uses the number of input bamfiles to check output files """
     for i in range(len(bamfiles)):
         rep = i if i < dims[0] else i - dims[0]
         sig = 0 if i < dims[0] else 1
@@ -305,12 +306,16 @@ def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
     pcutoff_peaks = {}
     pcutoff_pvalues = {}
 
+
     if len(pcutoff) == 3:
-        pvalue_init, pvalue_end, pvalue_step = pcutoff[0], pcutoff[1],pcutoff[3]
+        pvalue_init, pvalue_end, pvalue_step = int(pcutoff[0]), int(pcutoff[1]),int(pcutoff[2])
         if pvalue_end > sys.maxint:
             pvalue_end = sys.maxint
+    elif len(pcutoff) == 2:
+        pvalue_init, pvalue_end, pvalue_step = int(pcutoff[0]), int(pcutoff[1]), 1
     elif len(pcutoff) == 1:
-        pvalue_init, pvalue_end, pvalue_step = pcutoff[0], pcutoff[0] + 1, 1
+        pvalue_init, pvalue_end, pvalue_step = int(pcutoff[0]), int(pcutoff[0]) + 1, 1
+
 
     for i in range(pvalue_init, pvalue_end, pvalue_step):
         new = 0
@@ -325,8 +330,8 @@ def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
 
         if new_pvalues is None:
             print('the setting of end filter p-value is too big')
-            pcutoff_peaks['p_value_over_' + i] = pi_peaks
-            pcutoff_pvalues['p_value_over_' + i] = pi_pvalues
+            pcutoff_peaks['p_value_over_' + str(i)] = pi_peaks
+            pcutoff_pvalues['p_value_over_' + str(i)] = pi_pvalues
             return pcutoff_peaks, pcutoff_pvalues
 
         for k in range(len(new_peaks)):
@@ -337,9 +342,9 @@ def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
                 current_strand = strand
                 current_ct1 = ct1
                 current_ct2 = ct2
-                curretn_strand_pos = [strand_pos]
-                curretn_strand_neg = [strand_neg]
-                current_pvalue = new_pvalues[k]
+                current_strand_pos = [strand_pos]
+                current_strand_neg = [strand_neg]
+                current_pvalue = [new_pvalues[k]]
                 new += 1
             else:
                 if (current_chr == chrom) & (current_strand == strand) & (current_e >= s):
@@ -348,8 +353,8 @@ def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
                     current_pvalue.append(new_pvalues[k])
                     current_ct1 += ct1
                     current_ct2 += ct2
-                    curretn_strand_pos += [strand_pos]
-                    curretn_strand_neg += [strand_neg]
+                    current_strand_pos += [strand_pos]
+                    current_strand_neg += [strand_neg]
                     new += 1
                 else:
                     # current_ct1=current_ct1/new
@@ -357,7 +362,7 @@ def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
                     current_pvalue.sort(reverse=True)
                     # print(current_pvalue)
                     p = - min([np.log10(new) - x - np.log10(j + 1) for j, x in enumerate(current_pvalue)])
-                    ratio = _get_log_ratio(curretn_strand_pos, curretn_strand_neg)
+                    ratio = _get_log_ratio(current_strand_pos, current_strand_neg)
                     pi_peaks.append((current_chr, s, current_e, current_ct1, current_ct2, current_strand, ratio))
                     pi_pvalues.append(p)
 
@@ -366,18 +371,18 @@ def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
                     current_strand = strand
                     current_ct1 = ct1
                     current_ct2 = ct2
-                    curretn_strand_pos = [strand_pos]
-                    curretn_strand_neg = [strand_neg]
-                    current_pvalue = new_pvalues[k]
+                    current_strand_pos = [strand_pos]
+                    current_strand_neg = [strand_neg]
+                    current_pvalue = [new_pvalues[k]]
 
         current_pvalue.sort(reverse=True)
         p = - min([np.log10(new) - x - np.log10(j + 1) for j, x in enumerate(current_pvalue)])
-        ratio = _get_log_ratio(curretn_strand_pos, curretn_strand_neg)
+        ratio = _get_log_ratio(current_strand_pos, current_strand_neg)
         pi_peaks.append((current_chr, s, current_e, current_ct1, current_ct2, current_strand, ratio))
         pi_pvalues.append(p)
 
-        pcutoff_peaks['p_value_'+i] = pi_peaks
-        pcutoff_pvalues['p_value_'+i] = pi_pvalues
+        pcutoff_peaks['p_value_'+str(i)] = pi_peaks
+        pcutoff_pvalues['p_value_'+str(i)] = pi_pvalues
 
     return  pcutoff_pvalues, pcutoff_peaks
 
@@ -449,8 +454,9 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
 
     # From here we give different choices, one is to use the old one A, one is for the new method B with pcutoff
     if pcutoff is None:
+        print('gotion old method to calculate p-values')
         pvalues, peaks = _merge_consecutive_bins(tmp_peaks, distr, merge_bin) #merge consecutive peaks by coverage number integer, and compute p-value
-
+        print(pvalues.keys())
     else:
         # we use pcutoff values to new method B, we get p-values already from this part, better to pass directly
         pvalues, peaks = _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff)
@@ -464,9 +470,9 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
     #   r = GenomicRegion(chrom = chrom, initial = start, final = end, name = '', \
     #                     orientation = strand, data = str((c1, c2, pvalue_list[i], ratio)))
     # after this, we also need to define different output,
-    output = {}
-    pvalues = {}
-    ratios = {}
+    peak_output = {}
+    peak_pvalues = {}
+    peak_ratios = {}
 
     for pi_value in pvalues.keys():
 
@@ -474,9 +480,9 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
         if deadzones:
             regions = filter_deadzones(deadzones, regions)
 
-        output[pi_value] = []
-        pvalues[pi_value] = []
-        ratios[pi_value] = []
+        peak_output[pi_value] = []
+        peak_pvalues[pi_value] = []
+        peak_ratios[pi_value] = []
         main_sep = ':' #sep <counts> main_sep <counts> main_sep <pvalue>
         int_sep = ';' #sep counts in <counts>
 
@@ -486,11 +492,11 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
             counts = ",".join(tmp[0:len(tmp)-1]).replace('], [', int_sep).replace('], ', int_sep).replace('([', '').replace(')', '').replace(', ', main_sep)
             pvalue = float(tmp[len(tmp)-2].replace(")", "").strip())
             ratio = float(tmp[len(tmp)-1].replace(")", "").strip())
-            pvalues[pi_value].append(pvalue)
-            ratios[pi_value].append(ratio)
-            output[pi_value].append((el.chrom, el.initial, el.final, el.orientation, counts))
+            peak_pvalues[pi_value].append(pvalue)
+            peak_ratios[pi_value].append(ratio)
+            peak_output[pi_value].append((el.chrom, el.initial, el.final, el.orientation, counts))
 
-    return ratios, pvalues, output
+    return peak_ratios, peak_pvalues, peak_output
 
 def _output_ext_data(ext_data_list, bamfiles):
     """Output textfile and png file of read size estimation"""
@@ -656,9 +662,17 @@ def handle_input():
                       help="Define blacklisted genomic regions avoided for analysis (BED format). [default: %default]")
     parser.add_option("--no-correction", default=False, dest="no_correction", action="store_true",
                       help="Do not use multipe test correction for p-values (Benjamini/Hochberg). [default: %default]")
-    parser.add_option("-p", "--pvalue", dest="pcutoff", default=0.1, type="float",
+
+    parser.add_option("-p", "--pvalue", dest="pcutoff", default=None, type="str", action='callback',
+                      callback=_callback_list_float,
                       help="P-value cutoff for peak detection. Call only peaks with p-value lower than cutoff. "
                            "[default: %default]")
+
+    ## add p_fdr_correction option to substitute the original pcutoff
+    parser.add_option("--p_fdr", "--p_fdr_correction", dest="p_fdr_correction", default=0.1, type="float",
+                      help="fdr_correction for peak filtering and reduce false discovery rate "
+                           "[default: %default]")
+
     parser.add_option("--exts", default=None, dest="exts", type="str", action='callback', callback=_callback_list,
                       help="Read's extension size for BAM files (comma separated list for each BAM file in config "
                            "file). If option is not chosen, estimate extension sizes. [default: %default]")
@@ -687,8 +701,8 @@ def handle_input():
                           "signal. [default: %default]")
     group.add_option("--debug", default=False, dest="debug", action="store_true",
                      help="Output debug information. Warning: space consuming! [default: %default]")
-    group.add_option("--no-gc-content", dest="gc_correct", default=True, action="store_true",
-                     help="Do not normalize towards GC content. [default: %default]")
+    group.add_option("--gc-content", dest="gc_correct", default=True, action="store_true",
+                     help="Normalize towards GC content. [default: %default]")
     group.add_option("--norm-regions", default=None, dest="norm_regions", type="str",
                      help="Restrict normalization to particular regions (BED format). [default: %default]")
     group.add_option("-f", "--foldchange", dest="foldchange", default=1.6, type="float",
@@ -740,6 +754,11 @@ def handle_input():
         if not options.bamfiles1 or not options.bamfiles2:
             parser.error('BamFiles not given')
         else:
+            # this code is used to replicate the samples if input sample just one  under each condition
+            if len(options.bamfiles1) == 1:
+                options.bamfiles1.append(options.bamfiles1)
+            if len(options.bamfiles2) == 1:
+                options.bamfiles2.append(options.bamfiles2)
 
             bamfiles = options.bamfiles1 + options.bamfiles2
             dims = [len(options.bamfiles1), len(options.bamfiles2)]

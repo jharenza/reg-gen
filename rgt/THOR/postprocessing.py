@@ -113,21 +113,27 @@ def merge_delete(ext_size, merge, peak_list, pvalue_list):
     
     return results
 
-def filter_by_pvalue_strand_lag(ratios, pcutoff, pvalues, output, no_correction, name, singlestrand):
-    """Filter DPs by strang lag and pvalue"""
-    if not singlestrand:
-        zscore_ratios = zscore(ratios)
+def filter_by_pvalue_strand_lag(ratios, p_fdr_corretion, pvalues, output, no_correction, name, singlestrand):
+    """Filter DPs by strand lag and pvalue
+    --single-strand", default=False, dest="singlestrand", action="store_true",
+                     help="Allow single strand BAM file as input. [default: %default]
+    """
+    if not singlestrand:  # since singlestrand False, we normalize ratios
+        zscore_ratios = zscore(ratios)  # normalize it, and use -2 and 2 as limit, return the true_false index of zscore in this limit.
         ratios_pass = np.where(np.bitwise_and(zscore_ratios > -2, zscore_ratios < 2) == True, True, False)
     if not no_correction:
         pv_pass = [True] * len(pvalues)
+        # this code changes pvalues into normal value????
         pvalues = map(lambda x: 10**-x, pvalues)
         
         _output_BED(name + '_uncor', output, pvalues, pv_pass)
         _output_narrowPeak(name + '_uncor', output, pvalues, pv_pass)
-        
-        pv_pass, pvalues = multiple_test_correction(pvalues, alpha=pcutoff)
+
+        ## alpha uses pcutoff has a different meaning which I mean, maybe I need to change to new parameters, it's better..
+        # call the p_interval better..
+        pv_pass, pvalues = multiple_test_correction(pvalues, alpha=p_fdr_corretion)
     else:
-        pv_pass = np.where(np.asarray(pvalues) >= -log10(pcutoff), True, False)
+        pv_pass = np.where(np.asarray(pvalues) >= -log10(p_fdr_corretion), True, False)
     
     if not singlestrand:
         filter_pass = np.bitwise_and(ratios_pass, pv_pass)
@@ -139,6 +145,13 @@ def filter_by_pvalue_strand_lag(ratios, pcutoff, pvalues, output, no_correction,
     assert len(filter_pass) == len(pvalues)
     
     return output, pvalues, filter_pass
+
+def _output_empty_BED(filename_prefix):
+    """we get empty output, but we need to output an empty file to represent it"""
+    open(filename_prefix + '_diffpeaks_gain.bed', 'w').close()
+    open(filename_prefix + '_diffpeaks_lose.bed', 'w').close()
+    open(filename_prefix + '_diffpeaks_gain.narrowPeak.bed', 'w').close()
+    open(filename_prefix + '_diffpeaks_lose.narrowPeak.bed', 'w').close()
 
 def _output_BED(filename_prefix, output, pvalues, filter):
 
@@ -170,13 +183,13 @@ def _output_BED(filename_prefix, output, pvalues, filter):
     flose.close()
 
 
-def _output_narrowPeak(name, output, pvalues, filter):
+def _output_narrowPeak(filename_prefix, output, pvalues, filter):
     """Output in narrowPeak format,
     see http://genome.ucsc.edu/FAQ/FAQformat.html#format12"""
 
     ## Also to change it into two files
-    fgain = open(name + '_diffpeaks_gain.narrowPeak.bed', 'w')
-    flose = open(name + '_diffpeaks_lose.narrowPeak.bed', 'w')
+    fgain = open(filename_prefix + '_diffpeaks_gain.narrowPeak.bed', 'w')
+    flose = open(filename_prefix + '_diffpeaks_lose.narrowPeak.bed', 'w')
 
     true_strand = '.'
     # f = open(name + '_diffpeaks.narrowPeak', 'w')
