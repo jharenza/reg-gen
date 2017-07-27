@@ -274,6 +274,12 @@ def _merge_consecutive_bins(tmp_peaks, distr, merge=True):
             i += 1
 
         side = 'l' if strand == '+' else 'r'
+
+        if side == 'l':
+            assert sum(v1) > sum(v2), "cov1 %s  cov2%s, %d" % (str(v1), str(v2), i)
+        else:
+            assert sum(v1) <= sum(v2), "cov1 %s  cov2%s, %d" % (str(v1), str(v2), i)
+
         pvalues.append((v1, v2, side, distr))
 
         ratio = _get_log_ratio(tmp_pos, tmp_neg)
@@ -308,22 +314,23 @@ def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
 
 
     if len(pcutoff) == 3:
-        pvalue_init, pvalue_end, pvalue_step = int(pcutoff[0]), int(pcutoff[1]),int(pcutoff[2])
+        pvalue_init, pvalue_end, pvalue_step = pcutoff[0], pcutoff[1],pcutoff[2]
         if pvalue_end > sys.maxint:
             pvalue_end = sys.maxint
     elif len(pcutoff) == 2:
-        pvalue_init, pvalue_end, pvalue_step = int(pcutoff[0]), int(pcutoff[1]), 1
+        pvalue_init, pvalue_end, pvalue_step = pcutoff[0], pcutoff[1], 1
     elif len(pcutoff) == 1:
-        pvalue_init, pvalue_end, pvalue_step = int(pcutoff[0]), int(pcutoff[0]) + 1, 1
+        pvalue_init, pvalue_end, pvalue_step = pcutoff[0], pcutoff[0] + 1, 1
 
 
-    for i in range(pvalue_init, pvalue_end, pvalue_step):
+    for i in np.arange(pvalue_init, pvalue_end, pvalue_step):
         new = 0
         new_peaks = []
         new_pvalues = []
         pi_peaks = []
         pi_pvalues = []
         for j in range(len(bin_pvalues)):
+            # this means actually we filter like cumulatively..
             if bin_pvalues[j] >= i:
                 new_pvalues.append(bin_pvalues[j])
                 new_peaks.append(tmp_peaks[j])
@@ -338,6 +345,7 @@ def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
             chrom, s, e, ct1, ct2, strand, strand_pos, strand_neg = new_peaks[k]
             if new == 0:
                 current_chr = chrom
+                current_s = s
                 current_e = e
                 current_strand = strand
                 current_ct1 = ct1
@@ -351,8 +359,8 @@ def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
                     current_e = e
                     # if (numpy.argmax([pvalue,current_pvalue])==0):
                     current_pvalue.append(new_pvalues[k])
-                    current_ct1 += ct1
-                    current_ct2 += ct2
+                    current_ct1 = np.add(ct1, current_ct1 )
+                    current_ct2 = np.add(ct2, current_ct2 )
                     current_strand_pos += [strand_pos]
                     current_strand_neg += [strand_neg]
                     new += 1
@@ -363,14 +371,15 @@ def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
                     # print(current_pvalue)
                     p = - min([np.log10(new) - x - np.log10(j + 1) for j, x in enumerate(current_pvalue)])
                     ratio = _get_log_ratio(current_strand_pos, current_strand_neg)
-                    pi_peaks.append((current_chr, s, current_e, current_ct1, current_ct2, current_strand, ratio))
+                    pi_peaks.append((current_chr, current_s, current_e, list(current_ct1), list(current_ct2), current_strand, ratio))
                     pi_pvalues.append(p)
 
                     current_chr = chrom
+                    current_s = s
                     current_e = e
                     current_strand = strand
-                    current_ct1 = ct1
-                    current_ct2 = ct2
+                    current_ct1 = np.add(ct1, current_ct1)
+                    current_ct2 = np.add(ct2, current_ct2)
                     current_strand_pos = [strand_pos]
                     current_strand_neg = [strand_neg]
                     current_pvalue = [new_pvalues[k]]
@@ -378,7 +387,7 @@ def _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff):
         current_pvalue.sort(reverse=True)
         p = - min([np.log10(new) - x - np.log10(j + 1) for j, x in enumerate(current_pvalue)])
         ratio = _get_log_ratio(current_strand_pos, current_strand_neg)
-        pi_peaks.append((current_chr, s, current_e, current_ct1, current_ct2, current_strand, ratio))
+        pi_peaks.append((current_chr, current_s, current_e, list(current_ct1), list(current_ct2), current_strand, ratio))
         pi_pvalues.append(p)
 
         pcutoff_peaks['p_value_'+str(i)] = pi_peaks
@@ -419,9 +428,12 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
         # here strand is used to represent the gain or lose peak...
         # but we don't want it to mess with BED file format, so what could we get this information, and give them then??
         # Firstly not just to split it into two files according to strand values..
+
+        ## does state == 1 imply that cov1, cov2 has a relation  cov1 < cvo2 ??
         strand = '+' if states[i] == 1 else '-'
         cov1, cov2 = _get_covs(DCS, i, as_list=True)
-        
+
+
         cov1_strand = np.sum(DCS.overall_coverage_strand[0][0][:,DCS.indices_of_interest[i]]) + np.sum(DCS.overall_coverage_strand[1][0][:,DCS.indices_of_interest[i]])
         cov2_strand = np.sum(DCS.overall_coverage_strand[0][1][:,DCS.indices_of_interest[i]] + DCS.overall_coverage_strand[1][1][:,DCS.indices_of_interest[i]])
         
@@ -454,9 +466,8 @@ def get_peaks(name, DCS, states, exts, merge, distr, pcutoff, debug, no_correcti
 
     # From here we give different choices, one is to use the old one A, one is for the new method B with pcutoff
     if pcutoff is None:
-        print('gotion old method to calculate p-values')
+        print('use old method ( firstly merge bins and then calculate p-values for each merged bins )to calculate p-values')
         pvalues, peaks = _merge_consecutive_bins(tmp_peaks, distr, merge_bin) #merge consecutive peaks by coverage number integer, and compute p-value
-        print(pvalues.keys())
     else:
         # we use pcutoff values to new method B, we get p-values already from this part, better to pass directly
         pvalues, peaks = _calpvalues_merge_bins(tmp_peaks, bin_pvalues, distr, pcutoff)
@@ -849,7 +860,7 @@ def handle_input():
     if not exists(options.outputdir):
         os.mkdir(options.outputdir)
 
-    print(options.outputdir)
+    # print(options.outputdir)
 
     options.name = join(options.outputdir, options.name)
 

@@ -44,7 +44,7 @@ def get_data_block(filepath, feature):
             if not line.startswith("#") and read:
                 data.append(line)
                 
-    if len(data) == 1 and not (feature == "rep1" or feature == "rep2" or feature == "inputs1" or feature == "inputs2"):
+    if len(data) == 1 and not (feature == "sample1" or feature == "sample2" or feature == "inputs1" or feature == "inputs2"):
         return data[0]
     else:
         return data
@@ -52,13 +52,13 @@ def get_data_block(filepath, feature):
 
 def input_parser(filepath):
     # read first replicate and get the absolute file path
-    bamfiles_1 = get_data_block(filepath, "rep1")
+    bamfiles_1 = get_data_block(filepath, "sample1")
     bamfiles_1 = map(npath, bamfiles_1)
     # replicate samples
     if len(bamfiles_1) == 1:
         bamfiles_1.append(bamfiles_1)
 
-    bamfiles_2 = get_data_block(filepath, "rep2")
+    bamfiles_2 = get_data_block(filepath, "sample2")
     bamfiles_2 = map(npath, bamfiles_2)
     if len(bamfiles_2) == 1:
         bamfiles_2.append(bamfiles_2)

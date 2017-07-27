@@ -168,8 +168,6 @@ def run_HMM(region_giver, options, bamfiles, genome, organism_name, chrom_sizes,
     # need to deal with dictionary data..one by one is the best way..
     res_output, res_pvalues, res_filter_pass = {}, {}, {}
     for pi_value in pcutoff_output.keys():
-        print('keys in result are: ')
-        print(pi_value)
         ## add confition if pi_value is empty, we give empty output directly
         if pcutoff_output[pi_value] is None:
             _output_empty_BED(options.name + '_' + pi_value)
@@ -185,12 +183,12 @@ def run_HMM(region_giver, options, bamfiles, genome, organism_name, chrom_sizes,
                                                  threshDist=500000, show_dis=True)
         res_output[pi_value], res_pvalues[pi_value], res_filter_pass[pi_value] = filter_by_pvalue_strand_lag(pcutoff_ratios[pi_value], options.p_fdr_correction, pcutoff_pvalues[pi_value],
                                                                                pcutoff_output[pi_value],
-                                                                               options.no_correction, options.name,
+                                                                               options.no_correction, options.name +'_'+pi_value,
                                                                                options.singlestrand)
 
-        print('progress before output_BED files')
+        # print('progress before output_BED files')
         _output_BED(options.name+'_'+pi_value, res_output[pi_value], res_pvalues[pi_value], res_filter_pass[pi_value])
-        print('progress before narrow output_BED files')
+        # print('progress before narrow output_BED files')
         _output_narrowPeak(options.name+'_'+pi_value, res_output[pi_value], res_pvalues[pi_value], res_filter_pass[pi_value])
 
     # res_output, res_pvalues, res_filter_pass = filter_by_pvalue_strand_lag(ratios, options.p_fdr_corretion, pvalues, output,

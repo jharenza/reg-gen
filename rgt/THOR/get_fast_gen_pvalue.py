@@ -27,7 +27,8 @@ value y follows h2.
 from __future__ import print_function
 from scipy.stats import binom
 from math import log
-from sklearn.utils.extmath import logsumexp
+from scipy.misc import logsumexp  # change library from sklearn to scipy
+
 import numpy as np
 from rgt.THOR.neg_bin import NegBin
 
@@ -86,7 +87,7 @@ def compute_pvalue(distr, N, side, current_p, x):
     if distr['distr_name'] == 'nb':
         sum_num = map(lambda x: float(x), sum_num)
         sum_denum = map(lambda x: float(x), sum_denum)
-
+    # subtraction of log domain is division of sum_num/sum_denum, but why log(2) ??
     return logsumexp(np.array(sum_num)) - (log(2) + logsumexp(np.array(sum_denum)))
 
 
