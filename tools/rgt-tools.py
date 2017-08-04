@@ -21,7 +21,7 @@ from rgt.CoverageSet import CoverageSet
 from rgt.GenomicRegion import GenomicRegion
 from rgt.AnnotationSet import AnnotationSet
 from rgt.Util import OverlapType, GenomeData
-from rgt.GenomicRegionSet import GenomicRegionSet
+from rgt.GenomicRegionSet import GenomicRegionSet, GRSFileIO
 tag = "RGT-tools"
 
 
@@ -127,14 +127,24 @@ if __name__ == "__main__":
     parser_bedac.add_argument('-o', metavar='output', type=str, help="Output BED file")
     parser_bedac.add_argument('-v', metavar='value', type=str, help="Define value to add")
 
+    ############### BED merge  ############################################
+    # python rgt-convertor.py
+    parser_bedmerge = subparsers.add_parser('bed_merge', help="[BED] Merge regions by name")
+    parser_bedmerge.add_argument('-i', metavar='input', type=str, help="Input BED file")
+    parser_bedmerge.add_argument('-o', metavar='output', type=str, help="Output BED file")
+    parser_bedmerge.add_argument('-s', action="store_true", help="Strand specific")
+    parser_bedmerge.add_argument('-b', action="store_true", help="BED12 format")
+
+
     ############### BED merge by name ############################################
     # python rgt-convertor.py
     parser_bedmn = subparsers.add_parser('bed_merge_by_name', help="[BED] Merge regions by name")
     parser_bedmn.add_argument('-i', metavar='input', type=str, help="Input BED file")
     parser_bedmn.add_argument('-o', metavar='output', type=str, help="Output BED file")
+    parser_bedmn.add_argument('-b', action="store_true", help="BED12 format")
 
     ############### BED rename ###############################################
-    # python rgt-convertor.py
+    # python rgt-tools.py bed_rename -i -o -s -d -organism
     parser_bedrename = subparsers.add_parser('bed_rename', help="[BED] Rename regions by associated genes")
     parser_bedrename.add_argument('-i', metavar='input', type=str, help="Input BED file")
     parser_bedrename.add_argument('-o', metavar='output', type=str, help="Output BED file")
@@ -170,6 +180,8 @@ if __name__ == "__main__":
     parser_bedex.add_argument('-oz', "--onlyzero", action="store_true", default=False,
                               help="Extend only the zero-length regions")
     parser_bedex.add_argument('-len', metavar='length', type=int, help="Define the length to extend.")
+    parser_bedex.add_argument('-c', action="store_true", default=False,
+                              help="Extend from the center to both directions.")
     parser_bedex.add_argument('-l', action="store_true", default=False,
                               help="Extend from the left ends.")
     parser_bedex.add_argument('-r', action="store_true", default=False,
@@ -200,6 +212,8 @@ if __name__ == "__main__":
     parser_bedcut.add_argument('-o', metavar='output', type=str, help="Output BED name.")
     parser_bedcut.add_argument('-t', metavar="target", type=str,
                                help="Define the target BED file for cutting.")
+    parser_bedcut.add_argument('-s', action="store_true", default=False,
+                               help="Strand-specific.")
 
     ############### BED get promoters ########################################
     # python rgt-convertor.py bed_get_promoters -i -o -organism
@@ -256,6 +270,7 @@ if __name__ == "__main__":
     parser_bedro.add_argument('-o', metavar='output', type=str, help="Output BED file")
     parser_bedro.add_argument('-t', metavar='target', type=str, help="Define BED file for target regions")
     parser_bedro.add_argument('-k', "--keep", action="store_true", default=False, help="Keep the overlapped regions, and remove the non-overlapped ones.")
+    parser_bedro.add_argument('-b', "--block", action="store_true", default=False, help="Read and write BED12 format.")
 
     ############### BED add columns ################################
     parser_bedaddcol = subparsers.add_parser('bed_add_columns', 
@@ -315,6 +330,19 @@ if __name__ == "__main__":
     parser_adddata.add_argument('-o', metavar='output', type=str, help="Output BED file")
     parser_adddata.add_argument('-t', metavar='target', type=str, help="Target BED file")
 
+    ############### BED sampling regions randomly ################################
+    parser_sampling = subparsers.add_parser('bed_sampling',
+                                           help="[BED] Sampling the regions in the given BED file randomly")
+    parser_sampling.add_argument('-i', metavar='input', type=str, help="Input BED file")
+    parser_sampling.add_argument('-o', metavar='output', type=str, help="Output BED file")
+    parser_sampling.add_argument('-s', metavar='size', type=int, help="Number of the output regions")
+
+    ############### BED bed12tobed6 ################################
+    parser_bed12tobed6 = subparsers.add_parser('bed12tobed6',
+                                            help="[BED] Convert BED12 to BED6")
+    parser_bed12tobed6.add_argument('-i', metavar='input', type=str, help="Input BED file")
+    parser_bed12tobed6.add_argument('-o', metavar='output', type=str, help="Output BED file")
+    parser_bed12tobed6.add_argument('-e', action="store_true", help="Add exon number or not")
 
     ############### Divide regions in BED by expression #######################
     # python rgt-convertor.py divideBED -bed -t -o1 -o1 -c -m
@@ -562,13 +590,7 @@ if __name__ == "__main__":
                     regions.add(GenomicRegion(chrom=ch, initial=int(line[3]), final=int(line[4]),
                                               name=gn, orientation=line[6]))
 
-        if args.b:
-            # exons = GenomicRegionSet("output")
-            # exons.read_bed(args.o)
-            # exons.write_bed_blocks(args.o)
-            regions.write_bed_blocks(filename=args.o)
-        else:
-            regions.write_bed(filename=args.o)
+        regions.write(filename=args.o, io=GRSFileIO.Bed12 if args.b else GRSFileIO.Bed)
         print("Number:\t\t" + str(len(regions)))
 
 
@@ -616,9 +638,9 @@ if __name__ == "__main__":
         interg = genome.subtract(genes)
         if not os.path.exists(args.o):
             os.makedirs(args.o)
-        exons.write_bed(os.path.join(args.o, "exons.bed"))
-        introns.write_bed(os.path.join(args.o, "introns.bed"))
-        interg.write_bed(os.path.join(args.o, "intergenic.bed"))
+        exons.write(os.path.join(args.o, "exons.bed"))
+        introns.write(os.path.join(args.o, "introns.bed"))
+        interg.write(os.path.join(args.o, "intergenic.bed"))
 
 
     ############### BED add score ############################################
@@ -631,14 +653,22 @@ if __name__ == "__main__":
                 print(line+"\t"+args.v, file=g)
 
 
+    ############### BED merge  ########################################
+    elif args.mode == "bed_merge":
+        print(tag + ": [BED] Merge regions")
+        bed1 = GenomicRegionSet("input")
+        bed1.read(args.i, io=GRSFileIO.Bed12 if args.b else GRSFileIO.Bed)
+        bed1.merge(strand_specific=args.s)
+        bed1.write(args.o, io=GRSFileIO.Bed12 if args.b else GRSFileIO.Bed)
+
     ############### BED merge by name ########################################
     elif args.mode == "bed_merge_by_name":
         print(tag+": [BED] Merge regions by name")
 
         bed1 = GenomicRegionSet("input")
-        bed1.read_bed(args.i)
+        bed1.read(args.i, io=GRSFileIO.Bed12 if args.b else GRSFileIO.Bed)
         bed2 = bed1.mergebyname()
-        bed2.write_bed(args.o)
+        bed2.write(args.o, io=GRSFileIO.Bed12 if args.b else GRSFileIO.Bed)
 
     ############### BED rename regions #######################################
     elif args.mode == "bed_rename":
@@ -650,12 +680,12 @@ if __name__ == "__main__":
             print("organism:\t" + args.organism)
 
         bed = GenomicRegionSet(args.i)
-        bed.read_bed(args.i)
+        bed.read(args.i)
         if args.target:
             target = GenomicRegionSet(args.target)
-            target.read_bed(args.target)
+            target.read(args.target)
             bed.replace_region_name(regions=target)
-            bed.write_bed(args.o)
+            bed.write(args.o)
         else:
             if not args.genes:
                 renamebed = bed.gene_association(gene_set=None, organism=args.organism,
@@ -668,7 +698,7 @@ if __name__ == "__main__":
                                                  promoterLength=args.l, strand_specific=args.s,
                                                  threshDist=args.t, show_dis=args.d)
 
-            renamebed.write_bed(args.o)
+            renamebed.write(args.o)
 
 
     ############### BED change strands #######################################
@@ -676,12 +706,12 @@ if __name__ == "__main__":
         print(tag + ": [BED] Change strands by target BED file")
 
         bed = GenomicRegionSet(args.i)
-        bed.read_bed(args.i)
+        bed.read(args.i)
         # print(len(bed))
         if args.t:
             print("target:\t" + args.t)
             target = GenomicRegionSet(args.t)
-            target.read_bed(args.t)
+            target.read(args.t)
             if args.d != "0":
                 target.extend(left=int(args.d), right=int(args.d))
             bed.replace_region_strand(regions=target, reverse=args.r)
@@ -689,14 +719,14 @@ if __name__ == "__main__":
             bed.replace_region_strand(all=args.a)
         else:
             bed.replace_region_strand(regions=None, reverse=args.r)
-        bed.write_bed(args.o)
+        bed.write(args.o)
 
 
     ############### BED extend ###############################################
     elif args.mode == "bed_extend":
         print(tag + ": [BED] Entend the regions")
         bed = GenomicRegionSet("bed")
-        bed.read_bed(args.i)
+        bed.read(args.i)
         if args.l:
             bed.extend(left=args.len, right=0)
         if args.r:
@@ -705,34 +735,36 @@ if __name__ == "__main__":
             bed.extend_upstream(length=args.len)
         if args.down:
             bed.extend_downstream(length= args.len)
+        if args.c:
+            bed = bed.relocate_regions(center="midpoint", left_length=args.len, right_length=args.len)
 
-        bed.write_bed(args.o)
+        bed.write(args.o)
 
 
     ############### BED subtract ###############################################
     elif args.mode == "bed_subtract":
         print(tag + ": [BED] Subtract the regions")
         bed = GenomicRegionSet("bed")
-        bed.read_bed(args.i)
+        bed.read(args.i)
         if args.blocki:
             bed.extract_blocks()
         target = GenomicRegionSet("target")
-        target.read_bed(args.t)
+        target.read(args.t)
         if args.blockt:
             target.extract_blocks()
         out = bed.subtract(y=target, whole_region=args.all)
-        out.write_bed(args.o)
+        out.write(args.o)
 
 
     ############### BED cut ###############################################
     elif args.mode == "bed_cut":
         print(tag + ": [BED] Cut the regions and neglect the down stream ones")
         bed = GenomicRegionSet("bed")
-        bed.read_bed(args.i)
+        bed.read(args.i)
         target = GenomicRegionSet("target")
-        target.read_bed(args.t)
+        target.read(args.t)
         out = bed.cut_regions(target)
-        out.write_bed(args.o)
+        out.write(args.o)
 
     ############### BED get promoters #########################################
     elif args.mode == "bed_get_promoters":
@@ -740,7 +772,7 @@ if __name__ == "__main__":
         gene = GenomicRegionSet("genes")
         ### Input BED file
         if args.i.endswith(".bed"):
-            gene.read_bed(args.i)
+            gene.read(args.i)
             promoter = GenomicRegionSet("promoter")
             promoterLength = int(args.l)
             for s in gene:
@@ -761,7 +793,7 @@ if __name__ == "__main__":
 
         
         #print(len(promoter))
-        promoter.write_bed(args.o)
+        promoter.write(args.o)
 
 
 
@@ -772,7 +804,7 @@ if __name__ == "__main__":
         gene = GenomicRegionSet("genes")
         ### Input BED file
         
-        gene.read_bed(args.i)
+        gene.read(args.i)
         print(len(gene))
         target = GenomicRegionSet("target")
         # if args.min == 0: cut = float("inf")
@@ -792,7 +824,7 @@ if __name__ == "__main__":
                 target.add(s)
         
         print(len(target))
-        target.write_bed(args.o)
+        target.write(args.o)
 
 
     ############### BED to FASTA #############################################
@@ -804,7 +836,7 @@ if __name__ == "__main__":
         elif ".fa" in args.o:
             fasta = open(args.o, "w")
         regions = GenomicRegionSet("regions")
-        regions.read_bed(args.i)
+        regions.read(args.i)
 
         for region in regions:
             if "/" in region.name:
@@ -826,7 +858,7 @@ if __name__ == "__main__":
                     if reg[0] == r.chrom and reg[1] == r.initial and reg[2] == r.final:
                         name = "peak_"+str(j+1)
             elif args.loci:
-                name = r.toString(underline=True)
+                name = r.toString(underline=True, strand=True)
             else: name = r.name
 
             if r.data and len(r.data.split()) == 7:
@@ -885,7 +917,7 @@ if __name__ == "__main__":
     elif args.mode == "bed_filter":
         print(tag + ": [BED] Filter genes")
         bed = GenomicRegionSet(args.i)
-        bed.read_bed(args.i)
+        bed.read(args.i)
 
         if args.gene:
             if os.path.isfile(args.gene):
@@ -915,7 +947,7 @@ if __name__ == "__main__":
             bed = bed.filter_by_size(minimum=args.min, maximum=args.max)
 
 
-        bed.write_bed(args.o)
+        bed.write(args.o)
                     
         print("complete.")
 
@@ -932,16 +964,20 @@ if __name__ == "__main__":
 
         # with open(args.target) as f:
         t = GenomicRegionSet("targets")
-        t.read_bed(args.t)
+        t.read(args.t, io=GRSFileIO.Bed12 if args.block else GRSFileIO.Bed)
 
         # with open(args.i) as fi, open(args.o, "w") as fo:
         input_regions = GenomicRegionSet("input")
-        input_regions.read_bed(args.i)
+        input_regions.read(args.i, io=GRSFileIO.Bed12 if args.block else GRSFileIO.Bed)
         if args.keep:
             output_regions = input_regions.intersect(t, mode=OverlapType.ORIGINAL)
         else:
             output_regions = input_regions.subtract(t, whole_region=True)
-        output_regions.write_bed(args.o)
+
+        output_regions.write(args.o, io=GRSFileIO.Bed12 if args.block else GRSFileIO.Bed)
+        print("input regions:\t"+str(len(input_regions)))
+        print("target regions:\t" + str(len(t)))
+        print("output regions:\t" + str(len(output_regions)))
         print("complete.")
 
     ############### BED add columns #############################################
@@ -1008,21 +1044,21 @@ if __name__ == "__main__":
                     else: gene2.append(g)
 
         bed = GenomicRegionSet(args.bed)
-        bed.read_bed(args.bed)
+        bed.read(args.bed)
         o1 = GenomicRegionSet(args.o1)
         o2 = GenomicRegionSet(args.o2)
         for r in bed:
             if r.name in gene1: o1.add(r)
             elif r.name in gene2: o2.add(r)
-        o1.write_bed(args.o1)
-        o2.write_bed(args.o2)
+        o1.write(args.o1)
+        o2.write(args.o2)
 
 
     ############### BED average size ###########################
     elif args.mode == "bed_size":
         print(tag + ": [BED] Average size")
         bed = GenomicRegionSet("bed")
-        bed.read_bed(args.i)
+        bed.read(args.i)
         print("Average size:\t"+str(bed.average_size()))
         print("Size variance:\t" + str(bed.size_variance()))
         print()
@@ -1032,15 +1068,17 @@ if __name__ == "__main__":
     elif args.mode == "bed_complement":
         print(tag + ": [BED] Get complementary regions from genome")
         bed = GenomicRegionSet("bed")
-        bed.read_bed(args.i)
+        bed.read(args.i)
         genome = GenomicRegionSet(args.organism)
         genome.get_genome_data(organism=args.organism, chrom_X=True, chrom_Y=False, chrom_M=False)
         res = genome.subtract(bed)
-        res.write_bed(args.o)
+        res.write(args.o)
         print()
 
     ############### BED Detect polyA reads ###########################
     elif args.mode == "bed_polya":
+
+        non_available = 0
         print(tag + ": [BED] Detect the reads with poly-A tail on the regions")
         def count_polyA_on_bam(bed, bam):
             pattern = "AAAAA"
@@ -1084,19 +1122,19 @@ if __name__ == "__main__":
 
                 if all_read == 0:
                     if all_r == 0:
-                        res.append([r.name, count_polyA, all_read, "n.a.", all_a, all_r, "n.a."])
+                        res.append([r.name, count_polyA, all_read, non_available, all_a, all_r, non_available])
                     else:
-                        res.append([r.name, count_polyA, all_read, "n.a.", all_a, all_r, float(all_a)/all_r])
+                        res.append([r.name, count_polyA, all_read, non_available, all_a, all_r, float(all_a)/all_r])
                 else:
                     if all_r == 0:
-                        res.append([r.name, count_polyA, all_read, float(count_polyA)/all_read, all_a, all_r, "n.a."])
+                        res.append([r.name, count_polyA, all_read, float(count_polyA)/all_read, all_a, all_r, non_available])
                     else:
                         res.append([r.name, count_polyA, all_read, float(count_polyA)/all_read, all_a, all_r, float(all_a)/all_r])
             samfile.close()
             return res
 
         bed = GenomicRegionSet("bed")
-        bed.read_bed(args.i)
+        bed.read(args.i)
 
         if os.path.isfile(args.b):
             res = count_polyA_on_bam(bed=bed, bam=args.b)
@@ -1117,11 +1155,15 @@ if __name__ == "__main__":
                         # bams.append(f.rpartition(".")[0])
                         res = count_polyA_on_bam(bed=bed, bam=os.path.join(root, f))
                         for line in res:
-                            col_res[line[0]].append([line[1:]])
+                            col_res[line[0]].append(line[1:])
 
             for r in bed:
                 ar = numpy.array(col_res[r.name])
+                # print(ar)
+                # print(numpy.mean(ar, axis=1))
                 col_res[r.name] = numpy.mean(ar, axis=1).tolist()
+                # print(col_res[r.name])
+                # sys.exit(1)
 
             with open(args.o, "w") as f:
                 print("\t".join(["name", "polyA_reads_in_window_ave", "all_reads_in_window_ave",
@@ -1167,7 +1209,7 @@ if __name__ == "__main__":
                     if f.endswith(".bed"):
                         name = os.path.basename(f).replace(".bed", "")
                         bed = GenomicRegionSet(name)
-                        bed.read_bed(os.path.join(dirpath, f))
+                        bed.read(os.path.join(dirpath, f))
                         bed.sort()
                         beds.append(bed)
                         bednames.append(name)
@@ -1182,7 +1224,7 @@ if __name__ == "__main__":
                 if b.endswith(".bed"):
                     name = os.path.basename(b).replace(".bed", "")
                     bed = GenomicRegionSet(name)
-                    bed.read_bed(b)
+                    bed.read(b)
                     bed.sort()
                     beds = [bed]
                     bednames = [name]
@@ -1217,9 +1259,9 @@ if __name__ == "__main__":
     elif args.mode == "bed_distance":
         print(tag + ": [BED] Calculate the distances between two region sets")
         bed = GenomicRegionSet(args.i)
-        bed.read_bed(args.i)
+        bed.read(args.i)
         target = GenomicRegionSet(args.t)
-        target.read_bed(args.t)
+        target.read(args.t)
 
         res_dis = []
         for s in bed:
@@ -1241,9 +1283,9 @@ if __name__ == "__main__":
     elif args.mode == "bed_standard_chrom":
         print(tag + ": [BED] Standardize chomosomes")
         bed = GenomicRegionSet(args.i)
-        bed.read_bed(args.i)
+        bed.read(args.i)
         nbed = bed.standard_chrom()
-        nbed.write_bed(args.i)
+        nbed.write(args.i)
 
 
     ############### BED add overlapping region name ###########################
@@ -1251,9 +1293,9 @@ if __name__ == "__main__":
     elif args.mode == "bed_add_data":
         print(tag + ": [BED] Add overlapping region name")
         bed = GenomicRegionSet(args.i)
-        bed.read_bed(args.i)
+        bed.read(args.i)
         target = GenomicRegionSet(args.t)
-        target.read_bed(args.t)
+        target.read(args.t)
         overlap_regions = target.intersect(bed, mode=OverlapType.ORIGINAL)
         with open(args.i) as fin:
             with open(args.o, "w") as fout:
@@ -1268,6 +1310,24 @@ if __name__ == "__main__":
                             print(line + "\t.", file=fout)
 
 
+    ############### BED Sampling regions randomly ###########################
+    #
+    elif args.mode == "bed_sampling":
+        print(tag + ": [BED] Sampling the regions randomly")
+        bed = GenomicRegionSet(args.i)
+        bed.read(args.i)
+        beds = bed.random_subregions(size=args.s)
+        beds.write(args.o)
+
+
+    ############### BED bed12tobed6 ###########################
+    #
+    elif args.mode == "bed12tobed6":
+        print(tag + ": [BED] Convert BED12 to BED6")
+        bed = GenomicRegionSet(args.i)
+        bed.read(args.i, io=GRSFileIO.Bed12)
+        bed.write(args.o)
+
 
     ############### BAM filtering by BED ###########################
     #
@@ -1275,7 +1335,7 @@ if __name__ == "__main__":
         print(tag + ": [BED] Filtering BAM file by the regions in BED file")
 
         bed = GenomicRegionSet("bed")
-        bed.read_bed(args.bed)
+        bed.read(args.bed)
         bam = pysam.AlignmentFile(args.i, "rb")
         outbam = pysam.AlignmentFile(args.o+".sam", "wh", template=bam)
         # in_reads = []
@@ -1428,7 +1488,7 @@ if __name__ == "__main__":
         else: tag = "_p"+str(args.p)+"_fc"+str(args.fc)
 
         bed = GenomicRegionSet("input")
-        bed.read_bed(args.i)
+        bed.read(args.i)
         print("Number of input peaks:\t"+str(len(bed)))
 
         if args.rename and args.g:
@@ -1479,10 +1539,10 @@ if __name__ == "__main__":
                                                  orientation=region.orientation, data=data, name=region.name))
                     lose_peaks.add(region)
 
-        gain_peaks.write_bed(os.path.join(args.o, name + tag + "_gain.bed"))
-        lose_peaks.write_bed(os.path.join(args.o, name + tag + "_lose.bed"))
-        gain_table.write_bed(os.path.join(args.o, name + tag + "_gain.table"))
-        lose_table.write_bed(os.path.join(args.o, name + tag + "_lose.table"))
+        gain_peaks.write(os.path.join(args.o, name + tag + "_gain.bed"))
+        lose_peaks.write(os.path.join(args.o, name + tag + "_lose.bed"))
+        gain_table.write(os.path.join(args.o, name + tag + "_gain.table"))
+        lose_table.write(os.path.join(args.o, name + tag + "_lose.table"))
 
         print("Number of gain peaks:\t" + str(len(gain_peaks)))
         print("Number of lose peaks:\t" + str(len(lose_peaks)))
@@ -1494,7 +1554,7 @@ if __name__ == "__main__":
         
         if args.b:
             regions = GenomicRegionSet("regions")
-            regions.read_bed(args.b)
+            regions.read(args.b)
             for r in regions:
                 print(r.name)
                 s = get_sequence(ch=r.chrom, ss=r.initial, es=r.final, strand=r.orientation, 
@@ -1683,13 +1743,13 @@ if __name__ == "__main__":
 
         print("tcons:\t" + args.t)
         tcons = GenomicRegionSet("tcons")
-        tcons.read_bed(args.t)
+        tcons.read(args.t)
         circrna = GenomicRegionSet("circRNA")
-        circrna.read_bed(args.o)
+        circrna.read(args.o)
         circ_inTCON = circrna.intersect(y=tcons, mode = OverlapType.COMP_INCL)
         circ_TCONs = tcons.intersect(y=circ_inTCON, mode = OverlapType.ORIGINAL)
         #print(len(circ_TCONs))
-        circ_TCONs.write_bed(args.c)
+        circ_TCONs.write(args.c)
 
 
 #  0        1       2     3         4       5   6   7   8
@@ -1718,6 +1778,6 @@ if __name__ == "__main__":
         txp = RNADNABindingSet("txp")
         txp.read_txp(filename=args.i, dna_fine_posi=True)
         tmp = os.path.join(os.path.dirname(args.o), "temp.bed")
-        txp.write_bed(filename=tmp)
+        txp.write(filename=tmp)
         os.system("sort -k1,1V -k2,2n " + tmp + " > " + args.o)
         os.remove(tmp)

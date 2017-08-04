@@ -35,6 +35,8 @@ def get_data_block(filepath, feature):
         read = False
         for line in f:
             line = line.strip()
+            if line == '':
+                continue
             if line.startswith("#") and line == "#" + str(feature):
                 read = True
             
