@@ -132,7 +132,7 @@ def get_factors(data):
     return list(np.array(np.mean(d, axis=1)).reshape(-1))
 
 def norm_gene_level(bams, bed, name, verbose, folder, report):
-    """Normalize bam files on a gene level. Give out list of normalization factors."""
+    """Normalize bam files on a gene level by using house-keeping genes. Give out list of normalization factors."""
     m = get_experimental_matrix(bams, bed)
     d = zip(m.types, m.names)
     d = map(lambda x: x[1], filter(lambda x: x[0] == 'reads', d)) #list of names which are reads

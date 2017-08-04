@@ -71,7 +71,7 @@ class MultiCoverageSet(DualCoverageSet):
         return cov1, cov2
     
     def _compute_gc_content(self, gc_correct, path_inputs, stepsize, binsize, genome_path, name, chrom_sizes, chrom_sizes_dict):
-        """Compute GC-content"""
+        """Compute GC-content, but path_inputs are needed definitely """
         if gc_correct and path_inputs and self.gc_content_cov is None:
             print("Compute GC-content", file=sys.stderr)
             for i, cov in enumerate(self.covs):

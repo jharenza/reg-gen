@@ -39,8 +39,8 @@ Return shift/extension size of reads descriebed by BAM file.
 from __future__ import print_function
 import pysam
 
-cov_f = {}
-cov_r = {}
+cov_f = {}  # forward strand reads
+cov_r = {}  # reverse strand reads
 
 
 def get_value(d, x):
@@ -49,6 +49,7 @@ def get_value(d, x):
 
 
 def get_read_size(filename):
+    """ calculate the avarage read size in one file"""
     f = pysam.Samfile(filename, "rb")
 
     s = []
@@ -66,6 +67,9 @@ def get_read_size(filename):
 
 
 def init_cov(filename):
+    """ to get values for cov_f and cov_r
+    If reads in the position, then set cov_x[position] = 1
+    """
     file = pysam.Samfile(filename, "rb")
 
     for read in file.fetch(file.references[0]):
@@ -74,6 +78,7 @@ def init_cov(filename):
                 h = 0
             else:
                 h = len(read.seq)
+            # If read is mappable, so we add
             pos = read.pos + read.rlen - h if read.is_reverse else read.pos
             if read.is_reverse:
                 if not cov_r.has_key(pos):
@@ -84,9 +89,10 @@ def init_cov(filename):
 
 
 def ccf(k):
-    """Return value of cross-correlation function"""
+    """Return value of cross-correlation function with assuming length k """
     s = 0
     forward_keys = set(cov_f.keys())
+    # why it it x-k before calculation?? we want to get the right_most position of all reads??
     reverse_keys = set(map(lambda x: x - k, cov_r.keys()))
     keys = forward_keys & reverse_keys
 
@@ -98,7 +104,11 @@ def ccf(k):
 
 def get_extension_size(filename, start=0, end=600, stepsize=5):
     """Return extension/shift size of reads and all computed values of the convolution. 
-    Search value with a resolution of <stepsize> from start to end."""
+    Search value with a resolution of <stepsize> from start to end.
+    :return
+      <1> extension size estimation
+       <2>
+    """
     read_length = get_read_size(filename)
     start -= read_length
 

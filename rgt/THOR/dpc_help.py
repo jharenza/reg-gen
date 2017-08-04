@@ -534,11 +534,21 @@ def _output_ext_data(ext_data_list, bamfiles):
 
 
 def _compute_extension_sizes(bamfiles, exts, inputs, exts_inputs, report):
-    """Compute Extension sizes for bamfiles and input files"""
+    """Compute Extension sizes for bamfiles and input files
+    @:param bamfiles:  list of banfiles for reads
+    @:param exts: user defined Read's extension size list for BAM files
+    @:param inputs: genome input files
+    @:param exts_inputs : read extension size for input genome, !!
+            but always empty list, cause there is no such parameter accepted from user
+    @:param report:  if report is True, we write it html files
+    :return
+        exts: extension size list for reads which means fragment size of each bamfiles
+        exts_inputs: input genomes are not empty, set ext_inputs to be [5,5,5,5.....] of length len(inputs)
+    """
     start = 0
     end = 600
     ext_stepsize = 5
-    
+
     ext_data_list = []
     #compute extension size
     if not exts:
@@ -573,7 +583,7 @@ def initialize(name, dims, genome_path, regions, stepsize, binsize, bamfiles, ex
                tracker, debug, norm_regions, scaling_factors_ip, save_wig, housekeeping_genes, \
                test, report, chrom_sizes_dict, counter, end, gc_content_cov=None, avg_gc_content=None, \
                gc_hist=None, output_bw=True, save_input=False, m_threshold=80, a_threshold=95, rmdup=False):
-    """Initialize the MultiCoverageSet"""
+    """Initialize the MultiCoverageSet which is after normalization like gc-content, subtraction by input genes"""
     regionset = regions
     regionset.sequences.sort()
     
@@ -712,7 +722,7 @@ def handle_input():
                           "signal. [default: %default]")
     group.add_option("--debug", default=False, dest="debug", action="store_true",
                      help="Output debug information. Warning: space consuming! [default: %default]")
-    group.add_option("--gc-content", dest="gc_correct", default=True, action="store_true",
+    group.add_option("--gc_correct", dest="gc_correct", default=False, action="store_true",
                      help="Normalize towards GC content. [default: %default]")
     group.add_option("--norm-regions", default=None, dest="norm_regions", type="str",
                      help="Restrict normalization to particular regions (BED format). [default: %default]")
@@ -761,7 +771,6 @@ def handle_input():
     else:
         # Now we want to change to command line methods..and I would like to define another function
         # with function there is a problem that we need to pass a lot of parameters. then at first write here to achieve this
-        #  bamfiles, genome, chrom_sizes, inputs, dims = input_parser(config_path)
         if not options.bamfiles1 or not options.bamfiles2:
             parser.error('BamFiles not given')
         else:
@@ -793,10 +802,13 @@ def handle_input():
         parser.error("organism doesn't exist, please install it firstly")
 
     chrom_sizes = organism.get_chromosome_sizes()
-    if not options.gc_correct:
-        genome = None
-    else:
+    ## If we want to do gc-correct, then we need input genome named inputs!!!
+    if options.gc_correct:
+        if inputs is None:
+            parser.error(" Doing gc_correct needs inputs genome file")
         genome = organism.get_genome()
+    else:
+        genome = None
 
 
     if options.exts and len(options.exts) != len(bamfiles):

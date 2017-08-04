@@ -59,7 +59,14 @@ def _write_info(tracker, report, **data):
 
 
 def train_HMM(region_giver, options, bamfiles, genome, chrom_sizes, dims, inputs, tracker):
-    """Train HMM"""
+    """Train HMM and get most possible state sequence from given data using Viterbi algorithm
+    :return m:
+    :return exp_data:
+    :return func_para
+    :return init_mu
+    :return inti_alpha
+    :return distr
+    """
     
     while True:
         train_regions = region_giver.get_training_regionset()
@@ -74,6 +81,7 @@ def train_HMM(region_giver, options, bamfiles, genome, chrom_sizes, dims, inputs
                               chrom_sizes_dict=region_giver.get_chrom_dict(), end=True, counter=0, output_bw=False,
                               save_input=options.save_input, m_threshold=options.m_threshold,
                               a_threshold=options.a_threshold, rmdup=options.rmdup)
+        ## After initialization, we get normalized training data (matrix)
         if exp_data.count_positive_signal() > len(train_regions.sequences[0]) * 0.00001:
             tracker.write(text=" ".join(map(lambda x: str(x), exp_data.exts)), header="Extension size (rep1, rep2, input1, input2)")
             tracker.write(text=map(lambda x: str(x), exp_data.scaling_factors_ip), header="Scaling factors")
